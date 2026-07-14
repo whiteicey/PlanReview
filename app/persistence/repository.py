@@ -273,6 +273,14 @@ class ReviewRepository:
             self.session.rollback()
             raise
 
+    def case_file_paths(self, case_id: str) -> list[str]:
+        """Return only this case's persisted relative file paths, including recycled cases."""
+        _safe_identifier(case_id, "case_id")
+        case = self.session.scalar(
+            select(CaseORM).where(CaseORM.case_id == case_id).options(selectinload(CaseORM.files))
+        )
+        return [] if case is None else [item.storage_relative_path for item in case.files]
+
     def permanently_delete_case(self, case_id: str, confirmation: str) -> None:
         """Delete only a recycled case after the explicit, case-bound confirmation."""
         _safe_identifier(case_id, "case_id")

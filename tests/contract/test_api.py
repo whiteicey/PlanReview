@@ -81,6 +81,13 @@ def test_upload_review_findings_patch_and_exports(monkeypatch, tmp_path):
         assert export.status_code == 200
         assert media_type in export.headers["content-type"]
         assert export.content
+        if format_name == "anonymous":
+            import json
+            from zipfile import ZipFile
+            with ZipFile(BytesIO(export.content)) as archive:
+                anonymous = json.loads(archive.read("anonymous-findings.json"))
+            assert case_id not in json.dumps(anonymous)
+            assert all(value.startswith("evidence-") for value in anonymous["findings"][0]["evidence_span_ids"])
 
 
 def test_upload_is_uuid_isolated_and_same_names_do_not_overwrite(monkeypatch, tmp_path):
@@ -105,6 +112,8 @@ def test_delete_requires_recycle_and_exact_confirmation(monkeypatch, tmp_path):
     bad_confirmation = client.request("DELETE", f"/api/cases/{case_id}", json={"confirmation": "DELETE wrong"})
     assert bad_confirmation.status_code == 422
     assert client.request("DELETE", f"/api/cases/{case_id}", json={"confirmation": f"DELETE {case_id}"}).status_code == 204
+    assert not (tmp_path / "storage" / created.json()["storage_relative_path"]).exists()
+    assert not (tmp_path / "storage" / "reports" / case_id).exists()
 
 
 def test_review_and_findings_survive_repository_restart(monkeypatch, tmp_path):

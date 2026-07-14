@@ -44,6 +44,26 @@ def test_config_is_safe_and_large_upload_is_rejected(monkeypatch, tmp_path):
     assert error.value.status_code == 413
 
 
+def test_real_multipart_upload_over_limit_is_rejected(monkeypatch, tmp_path):
+    monkeypatch.setenv("REVIEW_STORAGE_ROOT", str(tmp_path / "storage"))
+    from app.settings import get_settings
+    get_settings.cache_clear()
+    from app.main import app
+    client = TestClient(app)
+    response = client.post("/api/cases", files={"file": ("large.docx", b"x" * (100 * 1024 * 1024 + 1), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")})
+    assert response.status_code == 413
+
+
+def test_renamed_pdf_docx_is_rejected(monkeypatch, tmp_path):
+    monkeypatch.setenv("REVIEW_STORAGE_ROOT", str(tmp_path / "storage"))
+    from app.settings import get_settings
+    get_settings.cache_clear()
+    from app.main import app
+    response = TestClient(app).post("/api/cases", files={"file": ("renamed.docx", b"%PDF-1.7", "application/octet-stream")})
+    assert response.status_code == 415
+    assert "DOCX" in response.json()["detail"]
+
+
 def test_invalid_export_and_unknown_case_are_not_successful(monkeypatch, tmp_path):
     monkeypatch.setenv("REVIEW_STORAGE_ROOT", str(tmp_path / "storage"))
     from app.settings import get_settings

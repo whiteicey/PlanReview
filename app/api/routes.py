@@ -25,7 +25,7 @@ from app.persistence.repository import ReviewRepository
 from app.reports.exporters import export_anonymous_package, export_excel, export_word
 from app.review.pipeline import ReviewPipeline
 from app.settings import get_settings
-from app.storage.case_files import StoredFile, store_upload
+from app.storage.case_files import StoredFile, UploadTooLargeError, store_upload_streaming
 from app.storage.paths import safe_join, validate_upload_name
 
 router = APIRouter(prefix="/api", tags=["local review"])
@@ -35,9 +35,9 @@ def _case_id(value: str) -> str:
     try:
         parsed = UUID(value)
     except (TypeError, ValueError, AttributeError) as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "case_id 必须是 UUID4") from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "case_id 必须是 UUID4") from exc
     if parsed.version != 4 or str(parsed) != value.lower():
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "case_id 必须是 UUID4")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "case_id 必须是 UUID4")
     return str(parsed)
 
 
@@ -101,18 +101,24 @@ async def create_case(file: UploadFile = File(...)) -> CaseCreated:
     except UnsupportedFileTypeError as exc:
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, str(exc)) from exc
 
-    data = await file.read()
-    if len(data) > settings.max_file_bytes:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "文件超过100MB限制")
-
     case_id = str(uuid4())
     try:
-        stored = store_upload(settings.storage_root, case_id, filename, data)
+        stored = await store_upload_streaming(
+            settings.storage_root, case_id, filename, file, settings.max_file_bytes
+        )
         _repository().save_case(CaseRecord(case_id=case_id, files=[stored], statistics={"document_count": 1}))
+    except UploadTooLargeError as exc:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, str(exc)) from exc
+    except UnsupportedFileTypeError as exc:
+        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, str(exc)) from exc
     except (OSError, ValueError, PathTraversalError) as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "无法保存案例文件") from exc
     finally:
-        await file.close()
+        close = getattr(file, "close", None)
+        if close is not None:
+            result = close()
+            if hasattr(result, "__await__"):
+                await result
 
     return CaseCreated(
         case_id=case_id,
@@ -139,13 +145,13 @@ def review_case(case_id: str) -> ReviewSummary:
             for index, item in enumerate(case.files)
         ]
     except (ParseError, OSError) as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "DOCX 解析失败，仅处理文本型 DOCX") from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "DOCX 解析失败，仅处理文本型 DOCX") from exc
 
     run = ReviewPipeline().run(case_id, documents, [], MockProvider())
     try:
         repository.save_run(run)
     except ValueError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "审查结果无法持久化") from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "审查结果无法持久化") from exc
     return ReviewSummary(
         case_id=run.case_id,
         final_status=run.final_status,
@@ -170,7 +176,7 @@ def update_finding(finding_id: str, update: FindingReviewUpdate) -> FindingRespo
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "案例范围内未找到该问题") from exc
     except (TypeError, ValueError) as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
     run = _active_run(case_id)
     finding = next((item for item in run.findings if item.finding_id == finding_id), None)
@@ -208,8 +214,20 @@ def move_case_to_recycle_bin(case_id: str) -> dict[str, str]:
 @router.delete("/cases/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
 def permanently_delete_case(case_id: str, request: DeleteCaseRequest) -> None:
     case_id = _case_id(case_id)
+    repository = _repository()
+    if request.confirmation != f"DELETE {case_id}":
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "confirmation must equal 'DELETE {case_id}'")
     try:
-        _repository().permanently_delete_case(case_id, request.confirmation)
+        case_paths = repository.case_file_paths(case_id)
+        reports_dir = safe_join(get_settings().storage_root, "reports", case_id)
+        repository.permanently_delete_case(case_id, request.confirmation)
+        for relative_path in case_paths:
+            safe_join(get_settings().storage_root, *relative_path.split("/")).unlink(missing_ok=True)
+        if reports_dir.exists():
+            for artifact in reports_dir.iterdir():
+                if artifact.is_file() or artifact.is_symlink():
+                    artifact.unlink()
+            reports_dir.rmdir()
     except ValueError as exc:
-        code = status.HTTP_409_CONFLICT if "recycle bin" in str(exc) else status.HTTP_422_UNPROCESSABLE_ENTITY
+        code = status.HTTP_409_CONFLICT if "recycle bin" in str(exc) else status.HTTP_422_UNPROCESSABLE_CONTENT
         raise HTTPException(code, str(exc)) from exc

@@ -60,6 +60,10 @@ def export_anonymous_package(run: ReviewRun, target_zip: Path) -> Path:
     """Write a ZIP containing only anonymized persisted review metadata."""
     target_zip = Path(target_zip)
     target_zip.parent.mkdir(parents=True, exist_ok=True)
+    evidence_map: dict[str, str] = {}
+    for finding in run.findings:
+        for span_id in finding.evidence_span_ids:
+            evidence_map.setdefault(span_id, f"evidence-{len(evidence_map) + 1:04d}")
     payload = {
         "disclaimer": get_settings().disclaimer,
         "final_status": run.final_status,
@@ -73,13 +77,14 @@ def export_anonymous_package(run: ReviewRun, target_zip: Path) -> Path:
                 "title": item.title,
                 "description": item.description,
                 "suggestion": item.suggestion,
-                "evidence_span_ids": item.evidence_span_ids,
+                "evidence_span_ids": [evidence_map[span_id] for span_id in item.evidence_span_ids],
                 "review_status": item.review_status.value,
                 "human_note": item.human_note,
             }
             for item in run.findings
         ],
     }
+    payload["evidence_map"] = {opaque: "text-hash-only" for opaque in evidence_map.values()}
     with ZipFile(target_zip, "w", ZIP_DEFLATED) as archive:
         archive.writestr("anonymous-findings.json", json.dumps(payload, ensure_ascii=False))
     return target_zip
