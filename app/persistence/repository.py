@@ -35,6 +35,8 @@ from app.persistence.models import (
 from app.review.pipeline import ReviewRun
 from app.storage.case_files import StoredFile
 
+_SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+
 _SECRET_OR_BODY_MARKERS = (
     "api_key",
     "apikey",
@@ -118,13 +120,16 @@ class ReviewRepository:
             raise ValueError("run.case_id is required")
         _safe_text(run.case_id, "case_id")
         _safe_text(run.final_status, "final status")
+        # Validate every payload before touching ORM state. The commit block below
+        # still rolls back database errors; this preflight prevents a validation
+        # exception from leaving pending replacement rows in the Session.
+        _validate_run_payload(run)
         case = self.session.get(CaseORM, run.case_id)
         if case is None:
             case = CaseORM(case_id=run.case_id, statistics={})
             self.session.add(case)
-        recycle_entry = self.session.get(RecycleBinORM, run.case_id)
-        if recycle_entry is not None:
-            self.session.delete(recycle_entry)
+        if self.session.get(RecycleBinORM, run.case_id) is not None:
+            raise ValueError("cannot save a recycled case without explicit restore")
 
         record = self._active_run(run.case_id)
         if record is None:
@@ -154,19 +159,23 @@ class ReviewRepository:
                 self.session.expunge(child)
             self.session.flush()
 
-        self.session.add_all(
-            [
-                _rule_result_row(item, position, record.id)
-                for position, item in enumerate(run.rule_results)
-            ]
-        )
-        self.session.add_all(
-            [
-                _finding_row(item, position, record.id)
-                for position, item in enumerate(run.findings)
-            ]
-        )
-        self.session.commit()
+        try:
+            self.session.add_all(
+                [
+                    _rule_result_row(item, position, record.id)
+                    for position, item in enumerate(run.rule_results)
+                ]
+            )
+            self.session.add_all(
+                [
+                    _finding_row(item, position, record.id)
+                    for position, item in enumerate(run.findings)
+                ]
+            )
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
         self.session.refresh(record)
         return run.case_id
 
@@ -275,18 +284,27 @@ class ReviewRepository:
                 raise ValueError("sha256 must be a 64-character hexadecimal digest")
 
 
+def _validate_run_payload(run: ReviewRun) -> None:
+    _sanitize_json(_models_to_dict(run.facts))
+    _sanitize_json(_models_to_dict(run.stage_records))
+    for result in run.rule_results:
+        _rule_result_row(result, 0, 0)
+    for finding in run.findings:
+        _finding_row(finding, 0, 0)
+
+
 def _rule_result_row(result: RuleResult, position: int, review_run_id: int) -> RuleResultORM:
     return RuleResultORM(
         review_run_id=review_run_id,
         position=position,
-        rule_id=result.rule_id,
+        rule_id=_safe_identifier(result.rule_id, "rule_id"),
         status=result.status.value,
         severity=result.severity.value,
-        category=result.category,
-        parameter=result.parameter,
+        category=_safe_identifier(result.category, "rule category"),
+        parameter=_safe_identifier(result.parameter, "rule parameter", optional=True),
         message=_safe_text(result.message, "rule result message"),
-        evidence_span_ids=list(result.evidence_span_ids),
-        involved_fact_ids=list(result.involved_fact_ids),
+        evidence_span_ids=_safe_identifier_list(result.evidence_span_ids, "evidence_span_ids"),
+        involved_fact_ids=_safe_identifier_list(result.involved_fact_ids, "involved_fact_ids"),
         needs_human_review=result.needs_human_review,
         details=_sanitize_json(result.details),
     )
@@ -296,16 +314,16 @@ def _finding_row(finding: Finding, position: int, review_run_id: int) -> Finding
     return FindingORM(
         review_run_id=review_run_id,
         position=position,
-        finding_id=finding.finding_id,
+        finding_id=_safe_identifier(finding.finding_id, "finding_id"),
         origin=finding.origin.value,
-        category=finding.category,
+        category=_safe_identifier(finding.category, "finding category"),
         severity=finding.severity.value,
-        parameter=finding.parameter,
+        parameter=_safe_identifier(finding.parameter, "finding parameter", optional=True),
         title=_safe_text(finding.title, "finding title"),
         description=_safe_text(finding.description, "finding description"),
         suggestion=_safe_text(finding.suggestion, "finding suggestion"),
-        rule_id=finding.rule_id,
-        evidence_span_ids=list(finding.evidence_span_ids),
+        rule_id=_safe_identifier(finding.rule_id, "finding rule_id", optional=True),
+        evidence_span_ids=_safe_identifier_list(finding.evidence_span_ids, "evidence_span_ids"),
         needs_human_review=finding.needs_human_review,
         review_status=finding.review_status.value,
         human_note=_sanitize_note(finding.human_note),
@@ -359,6 +377,20 @@ def _to_plain_json(value: Any) -> Any:
     return value
 
 
+def _safe_identifier(value: str | None, field_name: str, *, optional: bool = False) -> str | None:
+    if value is None and optional:
+        return None
+    if not isinstance(value, str) or not _SAFE_IDENTIFIER_RE.fullmatch(value):
+        raise ValueError(f"{field_name} must be a bounded safe identifier")
+    return value
+
+
+def _safe_identifier_list(values: list[str], field_name: str) -> list[str]:
+    if not isinstance(values, list) or len(values) > 100:
+        raise ValueError(f"{field_name} must be a bounded list")
+    return [_safe_identifier(value, field_name) for value in values]
+
+
 def _safe_text(value: str | None, field_name: str) -> str | None:
     if value is None:
         return None
@@ -405,6 +437,13 @@ _NOTE_FORBIDDEN_MARKERS = (
     "raw_docx",
     "full body",
     "full_body",
+    "github_pat",
+    "google ai",
+    "jwt",
+    "private key",
+    "request payload",
+    "response payload",
+    "raw document",
     "document text",
     "document content",
     "raw docx",
@@ -418,7 +457,11 @@ def _contains_prohibited_content(value: str) -> bool:
     normalized = value.casefold()
     if any(marker in normalized for marker in _NOTE_FORBIDDEN_MARKERS):
         return True
-    if re.search(r"(?i)\b(?:sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{12,}|AKIA[0-9A-Z]{16})\b", value):
+    if re.search(r"(?i)\b(?:sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{12,}|github_pat_[A-Za-z0-9_]{12,}|AIza[0-9A-Za-z_-]{20,}|AKIA[0-9A-Z]{16})\b", value):
+        return True
+    if re.search(r"-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----", value):
+        return True
+    if re.fullmatch(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", value.strip()):
         return True
     if re.search(r"(?i)\b(?:api[_-]?key|token|secret|password)\s*[:=]\s*\S+", value):
         return True

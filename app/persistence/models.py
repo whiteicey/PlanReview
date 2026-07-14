@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.storage.case_files import StoredFile
@@ -101,13 +101,14 @@ class RuleResultORM(Base):
 
 class FindingORM(Base):
     __tablename__ = "findings"
+    __table_args__ = (UniqueConstraint("review_run_id", "finding_id", name="uq_finding_run_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     review_run_id: Mapped[int] = mapped_column(
         ForeignKey("review_runs.id", ondelete="CASCADE"), nullable=False, index=True
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False)
-    finding_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    finding_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     origin: Mapped[str] = mapped_column(String(32), nullable=False)
     category: Mapped[str] = mapped_column(String(255), nullable=False)
     severity: Mapped[str] = mapped_column(String(32), nullable=False)

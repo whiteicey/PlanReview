@@ -181,6 +181,52 @@ def test_human_note_rejects_secret_tokens_bodies_and_document_content(tmp_path):
             repo.update_finding_review("F-note", ReviewStatus.CONFIRMED, note)
 
 
+def test_save_run_validation_failure_does_not_replace_existing_run(tmp_path):
+    db = tmp_path / "review.db"
+    repo = ReviewRepository(create_session(db))
+    repo.save_run(ReviewRun("CASE-atomic", findings=[Finding(
+        finding_id="kept", origin=Origin.RULE, category="c", severity=Severity.LOW,
+        title="kept", evidence_span_ids=[], needs_human_review=True,
+    )]))
+    with pytest.raises(ValueError):
+        repo.save_run(ReviewRun("CASE-atomic", findings=[Finding(
+            finding_id="bad id", origin=Origin.RULE, category="c", severity=Severity.LOW,
+            title="replacement", evidence_span_ids=[], needs_human_review=True,
+        )]))
+    loaded = ReviewRepository(create_session(db)).get_run("CASE-atomic")
+    assert loaded is not None and loaded.findings[0].finding_id == "kept"
+
+
+def test_same_local_finding_id_is_allowed_in_two_cases(tmp_path):
+    db = tmp_path / "review.db"
+    repo = ReviewRepository(create_session(db))
+    for case_id in ("CASE-A", "CASE-B"):
+        repo.save_run(ReviewRun(case_id, findings=[Finding(
+            finding_id="local-id", origin=Origin.RULE, category="c", severity=Severity.LOW,
+            title="t", evidence_span_ids=[], needs_human_review=True,
+        )]))
+    assert ReviewRepository(create_session(db)).get_run("CASE-A").findings[0].finding_id == "local-id"
+    assert ReviewRepository(create_session(db)).get_run("CASE-B").findings[0].finding_id == "local-id"
+
+
+def test_recycled_case_cannot_be_saved_without_restore(tmp_path):
+    repo = ReviewRepository(create_session(tmp_path / "review.db"))
+    repo.save_run(ReviewRun("CASE-recycled"))
+    repo.delete_case_to_recycle_bin("CASE-recycled")
+    with pytest.raises(ValueError, match="recycled"):
+        repo.save_run(ReviewRun("CASE-recycled"))
+
+
+@pytest.mark.parametrize("bad_identifier", ["bad id", "../escape", "api/key", "原始文本"])
+def test_identifier_fields_fail_closed(tmp_path, bad_identifier):
+    repo = ReviewRepository(create_session(tmp_path / "review.db"))
+    with pytest.raises(ValueError):
+        repo.save_run(ReviewRun("CASE-ident", findings=[Finding(
+            finding_id=bad_identifier, origin=Origin.RULE, category="c", severity=Severity.LOW,
+            title="safe", evidence_span_ids=["safe-span"], needs_human_review=True,
+        )]))
+
+
 def test_repository_never_accepts_secret_field(tmp_path):
     repo = ReviewRepository(create_session(tmp_path / "review.db"))
 
