@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.domain.enums import Origin, ReviewStatus, RuleStatus, Severity
 from app.domain.schemas import Finding, RuleResult
 from app.persistence.db import create_session
@@ -58,6 +60,52 @@ def test_round_trip_run_and_human_review(tmp_path):
     assert reviewed.findings[0].human_note == "专家确认"
 
 
+def test_save_run_is_idempotent_for_same_finding_id(tmp_path):
+    db = tmp_path / "review.db"
+    repo = ReviewRepository(create_session(db))
+    first = ReviewRun(
+        "CASE-rerun",
+        findings=[
+            Finding(
+                finding_id="same-id",
+                origin=Origin.RULE,
+                category="capacity",
+                severity=Severity.HIGH,
+                title="first",
+                description="first",
+                suggestion="s",
+                evidence_span_ids=["s1"],
+                needs_human_review=True,
+            )
+        ],
+    )
+    second = first.__class__(
+        "CASE-rerun",
+        findings=[
+            Finding(
+                finding_id="same-id",
+                origin=Origin.RULE,
+                category="capacity",
+                severity=Severity.HIGH,
+                title="second",
+                description="second",
+                suggestion="s",
+                evidence_span_ids=["s2"],
+                needs_human_review=True,
+            )
+        ],
+    )
+
+    repo.save_run(first)
+    repo.save_run(second)
+    loaded = ReviewRepository(create_session(db)).get_run("CASE-rerun")
+
+    assert loaded is not None
+    assert len(loaded.findings) == 1
+    assert loaded.findings[0].finding_id == "same-id"
+    assert loaded.findings[0].title == "second"
+
+
 def test_case_metadata_only_stores_relative_file_paths_and_recycle_bin(tmp_path):
     db = tmp_path / "review.db"
     repo = ReviewRepository(create_session(db))
@@ -86,13 +134,14 @@ def test_case_metadata_only_stores_relative_file_paths_and_recycle_bin(tmp_path)
     assert restarted.recycle_bin_case_ids() == []
 
 
-def test_absolute_storage_path_and_unconfirmed_delete_are_rejected(tmp_path):
+@pytest.mark.parametrize("storage_path", ["C:/secret/a.docx", "\\\\server\\share\\a.docx", "\\\\?\\C:\\a.docx", "/root/a.docx", "cases\\CASE-3\\a.docx"])
+def test_absolute_storage_path_and_unconfirmed_delete_are_rejected(tmp_path, storage_path):
     repo = ReviewRepository(create_session(tmp_path / "review.db"))
     absolute_case = CaseRecord(
         case_id="CASE-3",
         files=[
             StoredFile(
-                storage_relative_path="C:/secret/a.docx",
+                storage_relative_path=storage_path,
                 sha256="b" * 64,
                 size=1,
                 safe_name="a.docx",
@@ -100,12 +149,8 @@ def test_absolute_storage_path_and_unconfirmed_delete_are_rejected(tmp_path):
         ],
     )
 
-    try:
+    with pytest.raises(ValueError, match="relative"):
         repo.save_case(absolute_case)
-    except ValueError as exc:
-        assert "relative" in str(exc)
-    else:
-        raise AssertionError("absolute storage paths must be rejected")
 
     repo.save_case(CaseRecord(case_id="CASE-3"))
     repo.delete_case_to_recycle_bin("CASE-3")
@@ -115,6 +160,25 @@ def test_absolute_storage_path_and_unconfirmed_delete_are_rejected(tmp_path):
         assert "confirmation" in str(exc)
     else:
         raise AssertionError("permanent deletion must require exact confirmation")
+
+
+def test_human_note_rejects_secret_tokens_bodies_and_document_content(tmp_path):
+    repo = ReviewRepository(create_session(tmp_path / "review.db"))
+    repo.save_run(ReviewRun("CASE-note", findings=[Finding(
+        finding_id="F-note", origin=Origin.RULE, category="c", severity=Severity.LOW,
+        title="t", evidence_span_ids=[], needs_human_review=True,
+    )]))
+
+    forbidden_notes = [
+        "api_key=sk-test-secret-value",
+        "token: abcdefghijklmnop",
+        "Authorization: Bearer abcdefghijklmnop",
+        'request body: {"messages": ["full body"]}',
+        "document content: 原始 DOCX 全文",
+    ]
+    for note in forbidden_notes:
+        with pytest.raises(ValueError, match="forbidden"):
+            repo.update_finding_review("F-note", ReviewStatus.CONFIRMED, note)
 
 
 def test_repository_never_accepts_secret_field(tmp_path):

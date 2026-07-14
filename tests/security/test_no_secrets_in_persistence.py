@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import inspect, select
 
-from app.domain.enums import Origin, Severity
+from app.domain.enums import Origin, ReviewStatus, Severity
 from app.domain.schemas import Finding
 from app.persistence.db import create_session
 from app.persistence.models import FindingORM, ReviewRunORM
@@ -29,6 +29,28 @@ def test_persistence_schema_excludes_secrets_and_raw_document_bodies(tmp_path):
         "external_request_body",
     }
     assert not columns & forbidden
+
+
+def test_human_note_forbidden_values_never_reach_sqlite(tmp_path):
+    session = create_session(tmp_path / "review.db")
+    repo = ReviewRepository(session)
+    repo.save_run(ReviewRun("CASE-note-security", findings=[Finding(
+        finding_id="F-note-security", origin=Origin.RULE, category="c", severity=Severity.LOW,
+        title="t", evidence_span_ids=[], needs_human_review=True,
+    )]))
+    for note in (
+        "api_key=sk-test-secret-value",
+        "token: abcdefghijklmnop",
+        "authorization: Bearer abcdefghijklmnop",
+        "request_body: full body contents",
+        "document_content: full DOCX text",
+    ):
+        try:
+            repo.update_finding_review("F-note-security", ReviewStatus.CONFIRMED, note)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("forbidden note was accepted")
 
 
 def test_saved_values_do_not_include_secret_or_full_request_body(tmp_path):

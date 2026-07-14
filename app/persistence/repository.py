@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from enum import Enum
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from sqlalchemy import select
@@ -47,6 +47,10 @@ _SECRET_OR_BODY_MARKERS = (
     "document_body",
     "payload",
     "messages",
+    "document_content",
+    "document_text",
+    "raw_content",
+    "full_body",
 )
 
 
@@ -120,19 +124,36 @@ class ReviewRepository:
                 stage_records=_sanitize_json(_models_to_dict(run.stage_records)),
             )
             self.session.add(record)
+            self.session.flush()
         else:
             record.final_status = run.final_status
             record.facts = _sanitize_json(_models_to_dict(run.facts))
             record.stage_records = _sanitize_json(_models_to_dict(run.stage_records))
-            record.rule_results.clear()
-            record.findings.clear()
+            # Delete children explicitly and flush before inserting replacements.
+            # This avoids transient duplicate finding_id values on reruns.
+            self.session.query(RuleResultORM).filter(
+                RuleResultORM.review_run_id == record.id
+            ).delete(synchronize_session=False)
+            self.session.query(FindingORM).filter(
+                FindingORM.review_run_id == record.id
+            ).delete(synchronize_session=False)
+            # Bulk DELETE bypasses the identity map; detach stale child objects
+            # before adding replacements with the same unique finding_id values.
+            for child in (*record.rule_results, *record.findings):
+                self.session.expunge(child)
+            self.session.flush()
 
-        record.rule_results.extend(
-            _rule_result_row(item, position)
-            for position, item in enumerate(run.rule_results)
+        self.session.add_all(
+            [
+                _rule_result_row(item, position, record.id)
+                for position, item in enumerate(run.rule_results)
+            ]
         )
-        record.findings.extend(
-            _finding_row(item, position) for position, item in enumerate(run.findings)
+        self.session.add_all(
+            [
+                _finding_row(item, position, record.id)
+                for position, item in enumerate(run.findings)
+            ]
         )
         self.session.commit()
         self.session.refresh(record)
@@ -222,14 +243,29 @@ class ReviewRepository:
             path = item.storage_relative_path
             native = Path(path)
             windows = PureWindowsPath(path)
-            if not path or native.is_absolute() or windows.is_absolute() or windows.drive or ".." in native.parts or ".." in windows.parts:
-                raise ValueError("storage_relative_path must be a relative path")
+            posix = PurePosixPath(path)
+            normalized = posix.as_posix()
+            if (
+                not path
+                or "\\" in path
+                or normalized != path
+                or normalized.startswith("/")
+                or native.is_absolute()
+                or windows.is_absolute()
+                or windows.root
+                or windows.drive
+                or ".." in native.parts
+                or ".." in windows.parts
+                or ".." in posix.parts
+            ):
+                raise ValueError("storage_relative_path must be a normalized relative POSIX path")
             if len(item.sha256) != 64 or any(char not in "0123456789abcdefABCDEF" for char in item.sha256):
                 raise ValueError("sha256 must be a 64-character hexadecimal digest")
 
 
-def _rule_result_row(result: RuleResult, position: int) -> RuleResultORM:
+def _rule_result_row(result: RuleResult, position: int, review_run_id: int) -> RuleResultORM:
     return RuleResultORM(
+        review_run_id=review_run_id,
         position=position,
         rule_id=result.rule_id,
         status=result.status.value,
@@ -244,8 +280,9 @@ def _rule_result_row(result: RuleResult, position: int) -> RuleResultORM:
     )
 
 
-def _finding_row(finding: Finding, position: int) -> FindingORM:
+def _finding_row(finding: Finding, position: int, review_run_id: int) -> FindingORM:
     return FindingORM(
+        review_run_id=review_run_id,
         position=position,
         finding_id=finding.finding_id,
         origin=finding.origin.value,
@@ -311,13 +348,58 @@ def _to_plain_json(value: Any) -> Any:
 
 
 def _sanitize_note(note: str | None) -> str | None:
+    """Fail closed for secrets, request bodies, and document content in notes."""
     if note is None:
         return None
     if not isinstance(note, str):
         raise TypeError("human note must be a string or None")
     if len(note) > 4_000:
         raise ValueError("human note exceeds 4000 characters")
+    normalized = note.casefold()
+    if any(marker in normalized for marker in _NOTE_FORBIDDEN_MARKERS):
+        raise ValueError("human note contains forbidden secret or body content")
+    if _looks_like_secret(note) or _looks_like_full_body(note):
+        raise ValueError("human note contains forbidden secret or body content")
     return note
+
+
+_NOTE_FORBIDDEN_MARKERS = (
+    "api_key",
+    "apikey",
+    "authorization",
+    "bearer ",
+    "token:",
+    "token=",
+    "secret:",
+    "secret=",
+    "password:",
+    "password=",
+    "request body",
+    "request_body",
+    "response body",
+    "response_body",
+    "document content",
+    "document_content",
+    "raw docx",
+    "raw_docx",
+    "full body",
+    "full_body",
+)
+
+
+def _looks_like_secret(note: str) -> bool:
+    import re
+
+    return bool(
+        re.search(r"(?i)\b(?:sk-[A-Za-z0-9_-]{12,}|bearer\s+[A-Za-z0-9._-]{12,})\b", note)
+        or re.search(r"(?i)\b(?:api[_-]?key|token|secret|password)\s*[:=]\s*\S+", note)
+    )
+
+
+def _looks_like_full_body(note: str) -> bool:
+    # Notes are short expert annotations, not a transport/document body. Reject
+    # explicit body-shaped markers and unusually large multi-line content.
+    return note.count("\n") >= 3 or len(note) > 1_000
 
 
 def _sanitize_json(value: Any) -> Any:
