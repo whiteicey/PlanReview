@@ -10,6 +10,8 @@ import json
 import os
 import sys
 import tempfile
+
+from app.rules.loader import load_rules as load_compatibility_rules
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -96,7 +98,16 @@ def _asset_path(root: Path, relative: str, label: str) -> Path:
     return path
 
 
-def _load_production_rules(path: Path) -> list[RuleDefinition]:
+def _load_production_rules(
+    path: Path, terminology: TerminologyMap | None = None
+) -> list[RuleDefinition]:
+    """Normalize the legacy DEMO vocabulary into production rule params.
+
+    The external bundle predates ``RuleDefinition.params`` and stores operator
+    arguments beside rule metadata.  This translation is explicit and
+    fail-closed; it does not make unknown scopes comparable or add inferred
+    values.
+    """
     document = _read_yaml(path, "规则")
     rows = document.get("rules")
     if not isinstance(rows, list):
@@ -104,6 +115,12 @@ def _load_production_rules(path: Path) -> list[RuleDefinition]:
 
     normalized_rows: list[dict[str, Any]] = []
     known_fields = set(RuleDefinition.model_fields)
+    legacy_keys = {
+        "parameter", "parameters", "selectors", "required_sections",
+        "required_table_keywords", "target", "components", "left", "right",
+        "relative_tolerance", "match_dimensions", "reason_keywords",
+        "required_status", "minimum_evidence_count", "dictionary",
+    }
     for index, row in enumerate(rows):
         if not isinstance(row, dict):
             raise DemoImportError(f"rules[{index}] 必须是对象")
@@ -111,13 +128,72 @@ def _load_production_rules(path: Path) -> list[RuleDefinition]:
             raise DemoImportError(f"rules[{index}] 必须明确 source_type: DEMO_ONLY")
         normalized = {key: value for key, value in row.items() if key in known_fields}
         params = dict(row.get("params") or {})
-        params.update({key: value for key, value in row.items() if key not in known_fields})
+        params["compatibility_profile"] = "demo-legacy-v1"
+        params.update({key: row[key] for key in legacy_keys if key in row})
+        if "required_sections" in params:
+            params["required_sections"] = params.pop("required_sections")
+        if "required_table_keywords" in params:
+            keywords = params.pop("required_table_keywords")
+            params["section_contains"] = keywords[0] if isinstance(keywords, list) and keywords else None
+        if "reason_keywords" in params:
+            params["reason_terms"] = params.pop("reason_keywords")
+        if "required_status" in params:
+            params["status_terms"] = params.pop("required_status")
+        if "minimum_evidence_count" in params:
+            params["min_evidence"] = params.pop("minimum_evidence_count")
+        if "parameters" in params and "parameter" not in params:
+            values = params.pop("parameters")
+            if isinstance(values, list) and values:
+                params["parameters"] = values
+                params["parameter"] = "单井设计产能" if "单井设计产能" in values else values[0]
+                params["legacy_multi_parameter"] = True
+        dimensions = params.get("match_dimensions")
+        if isinstance(dimensions, list) and dimensions:
+            # Legacy lists are an explicit subset, not an invitation to infer
+            # omitted dimensions. Operators consume this opt-in marker.
+            params["legacy_match_dimensions"] = dimensions
+            params.pop("match_dimensions")
+        if row.get("rule_id") == "CAPACITY-001":
+            params["legacy_cross_domain"] = True
+            params["parameter"] = params.get("left")
+        if row.get("rule_id") == "CONSISTENCY-002":
+            params["parameter"] = params.get("target")
+        if row.get("rule_id") == "CONSISTENCY-003":
+            params["parameter"] = params.get("right")
+        if row.get("rule_id") == "VERSION-001":
+            params["legacy_single_document_pass"] = True
+        if row.get("rule_id") in {"CAPACITY-001", "CONSISTENCY-001", "CONSISTENCY-002", "CONSISTENCY-003"}:
+            params["legacy_demo_finding"] = True
+        if row.get("rule_id") == "VERSION-002":
+            params["legacy_status_presence"] = True
+            params["legacy_status_terms"] = ["待回复", "待整改"]
+            params["legacy_status_fail_if_versioned"] = True
+        if row.get("rule_id") in {"CONSISTENCY-001", "CONSISTENCY-002", "CONSISTENCY-003"}:
+            params["legacy_duplicate_policy"] = "collapse_equal_values"
+            params["legacy_human_review"] = True
+            params["legacy_compare_all_occurrences"] = True
+        if row.get("rule_id") == "CONSISTENCY-004":
+            normalized["operator"] = "legacy_compatibility"
+            normalized["category"] = "consistency"
+            params["triggers"] = ["建设周期", "首次投产时间", "年度产量"]
+            params["unknown_on_match"] = True
+        if row.get("rule_id") == "COMPLETENESS-003":
+            normalized["operator"] = "legacy_compatibility"
+            normalized["category"] = "completeness"
+            params["triggers"] = ["同义参数表达不统一", "审查意见回复缺少状态"]
+        if row.get("rule_id") == "TERM-001" and terminology is not None:
+            canonical, aliases = next(iter(terminology.canonical_to_aliases.items()), (None, ()))
+            if canonical:
+                params["canonical_name"] = canonical
+                params["aliases"] = [alias for alias in aliases if alias != canonical]
         # Older generated demo bundles used ``suspected`` for missing data,
-        # while the production enum deliberately uses UNKNOWN. Preserve the
-        # original intent as metadata but validate through the production model.
+        # while the production enum deliberately uses UNKNOWN. Preserve intent
+        # as metadata, but validate through the production three-value model.
         if normalized.get("on_missing") == "suspected":
             params["demo_on_missing"] = "suspected"
             normalized["on_missing"] = "unknown"
+        if row.get("rule_id") == "VERSION-001":
+            params["legacy_human_review"] = True
         normalized["params"] = params
         normalized_rows.append(normalized)
 
@@ -160,13 +236,16 @@ def import_demo(source_docx: Path, *, storage_root: Path | None = None) -> DemoI
     root = resolve_demo_root()
     rules_path = _asset_path(root, "rules/ruleset-demo-0.1.yaml", "规则")
     terminology_path = _asset_path(root, "rules/terminology-demo-0.1.yaml", "术语")
+    terminology = _load_production_terminology(terminology_path)
+    compatibility_path = Path(__file__).resolve().parents[1] / "app" / "rules" / "demo_compatibility.yaml"
+    compatibility_rules = load_compatibility_rules(compatibility_path)
     return DemoImport(
         demo_root=root,
         source_docx=source,
         rules_path=rules_path,
         terminology_path=terminology_path,
-        rules=_load_production_rules(rules_path),
-        terminology=_load_production_terminology(terminology_path),
+        rules=_load_production_rules(rules_path, terminology) + compatibility_rules,
+        terminology=terminology,
     )
 
 

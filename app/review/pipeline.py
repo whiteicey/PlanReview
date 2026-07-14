@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 
 from app.domain.enums import Origin, PipelineStage, Severity
 from app.domain.schemas import Finding, ParameterFact, RuleDefinition, RuleResult, SourceSpan, StageRecord
@@ -62,7 +63,9 @@ class ReviewPipeline:
 
         def extracted() -> None:
             for document in documents:
-                facts = extract_parameter_facts(document)
+                version_match = re.search(r"V(\d+(?:\.\d+)?)", document.file_name)
+                source_version = version_match.group(0) if version_match else None
+                facts = extract_parameter_facts(document, source_version=source_version)
                 if self.terminology is not None:
                     facts = normalize_facts(facts, self.terminology)
                 raw_facts.extend(facts)
@@ -108,9 +111,8 @@ class ReviewPipeline:
 
         def reconciled() -> None:
             span_map = {span.span_id: span for span in spans}
-            state.findings = merge_findings(
-                rule_results_to_findings(state.rule_results, span_map), llm_findings
-            )
+            rule_findings = rule_results_to_findings(state.rule_results, span_map)
+            state.findings = merge_findings(rule_findings, llm_findings)
 
         result = StageRunner().run(
             [

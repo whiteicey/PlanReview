@@ -38,6 +38,7 @@ class ParameterFact(BaseModel):
     raw_name: str
     raw_value: str
     normalized_value: float | None = None
+    normalized_type: str | None = None
     raw_unit: str | None = None
     canonical_unit: str | None = None
     subject: str | None = None

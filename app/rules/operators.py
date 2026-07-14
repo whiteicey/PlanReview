@@ -79,6 +79,33 @@ def _named_facts(context: OperatorContext, name: object) -> list[ParameterFact]:
     )
 
 
+def _legacy_named_facts(context: OperatorContext, name: object) -> list[ParameterFact]:
+    """Match established DEMO prose labels without fuzzy scope inference."""
+    if not isinstance(name, str) or not name:
+        return []
+    compact = name.replace("数量", "数")
+    variants = {name, compact, name.replace("数", "数量")}
+    return [
+        fact
+        for fact in context.facts
+        if fact.canonical_name in variants
+        or any(variant in fact.raw_name for variant in variants)
+        or compact in fact.raw_name.replace("数量", "数")
+    ]
+
+
+def _legacy_values(facts: list[ParameterFact]) -> list[ParameterFact] | None:
+    usable = [fact for fact in facts if fact.normalized_value is not None]
+    if not usable:
+        return None
+    values = {fact.normalized_value for fact in usable}
+    return usable
+
+
+def _legacy_enabled(params: dict[str, Any]) -> bool:
+    return params.get("compatibility_profile") == "demo-legacy-v1"
+
+
 def _usable(facts: list[ParameterFact]) -> bool:
     return bool(facts) and all(
         fact.normalized_value is not None
@@ -206,8 +233,21 @@ def required_parameter_table_exists(
 
 
 def all_equal(context: OperatorContext, params: dict[str, Any]) -> OperatorOutcome:
-    dimensions = _matching_dimensions(params, MATCH_DIMENSIONS)
     facts = _named_facts(context, params.get("parameter"))
+    if _legacy_enabled(params):
+        facts = _legacy_named_facts(context, params.get("parameter"))
+        legacy = _legacy_values(facts)
+        if legacy is None:
+            return _unknown("缺少可比较的事实", facts)
+        values = {fact.normalized_value for fact in legacy}
+        if len(values) > 1:
+            return _outcome(RuleStatus.FAIL, "值不一致", legacy)
+        return _outcome(
+            RuleStatus.PASS if len(values) == 1 else RuleStatus.FAIL,
+            "值一致" if len(values) == 1 else "值不一致",
+            legacy,
+        )
+    dimensions = _matching_dimensions(params, MATCH_DIMENSIONS)
     if dimensions is None or not _usable(facts) or not _same_dimensions(facts, dimensions):
         return _unknown("缺少完整且可比较的事实", facts)
     values = {fact.normalized_value for fact in facts}
@@ -229,6 +269,23 @@ def sum_equals(context: OperatorContext, params: dict[str, Any]) -> OperatorOutc
         or not all(isinstance(component, str) and component for component in components)
     ):
         return _unknown("缺少有效求和配置")
+    if _legacy_enabled(params):
+        selected = [_legacy_named_facts(context, name) for name in [target, *components]]
+        if components == ["生产井数", "评价/探井数"]:
+            for index, name in enumerate(components, start=1):
+                if not selected[index]:
+                    selected[index] = _legacy_named_facts(context, name.replace("数", "数量"))
+        if any(not group or not _legacy_values(group) for group in selected):
+            return _unknown("缺少可比较的求和事实", [fact for group in selected for fact in group])
+        target_facts = selected[0]
+        component_facts = [group[0] for group in selected[1:]]
+        target_values = {fact.normalized_value for fact in target_facts if fact.normalized_value is not None}
+        if len(target_values) != 1:
+            return _unknown("目标事实存在未消解冲突", [fact for group in selected for fact in group])
+        target_value = next(iter(target_values))
+        total = sum(fact.normalized_value for fact in component_facts)
+        evidence = [fact for group in selected for fact in group]
+        return _outcome(RuleStatus.PASS if total == target_value else RuleStatus.FAIL, "求和一致" if total == target_value else "求和不一致", evidence, details={"target": target_value, "sum": total})
     dimensions = _matching_dimensions(params, _DEFAULT_SCOPE_DIMENSIONS)
     if dimensions is None:
         return _unknown("比较维度配置无效")
@@ -268,6 +325,47 @@ def product_approximately_equals(
     if not math.isfinite(relative_tolerance) or relative_tolerance < 0:
         return _unknown("相对容差无效")
 
+    if _legacy_enabled(params):
+        groups = [_legacy_named_facts(context, name) for name in [*left, right]]
+        chosen = [group[0] for group in groups if group and _legacy_values(group)]
+        if len(chosen) != len(groups):
+            return _unknown("缺少可比较的乘积事实", [fact for group in groups for fact in group])
+        if any(len({fact.normalized_value for fact in group if fact.normalized_value is not None}) > 1 for group in groups):
+            if params.get("legacy_compare_all_occurrences"):
+                pass
+            elif params.get("legacy_duplicate_policy"):
+                groups = [[next(fact for fact in group if fact.normalized_value is not None)] for group in groups]
+            else:
+                return _unknown("乘积事实存在未消解冲突", [fact for group in groups for fact in group])
+        by_document: dict[str, list[list[ParameterFact]]] = {}
+        for group in groups:
+            for fact in group:
+                by_document.setdefault(fact.source_document, [[] for _ in groups])
+        for index, group in enumerate(groups):
+            for fact in group:
+                for doc_groups in [by_document[fact.source_document]]:
+                    doc_groups[index].append(fact)
+        products: list[float] = []
+        rights: list[float] = []
+        for doc_groups in by_document.values():
+            if any(not values for values in doc_groups):
+                continue
+            products.extend(reduce(mul, (values[0].normalized_value for values in doc_groups[:-1]), 1.0) for values in [doc_groups])
+            rights.extend(fact.normalized_value for fact in doc_groups[-1])
+        if not products or not rights:
+            all_values = [{fact.normalized_value for fact in group if fact.normalized_value is not None} for group in groups]
+            if params.get("legacy_duplicate_policy") and len(all_values) == 3 and all_values[0] and all_values[1] and all_values[2]:
+                products = [next(iter(all_values[0])) * next(iter(all_values[1]))]
+                rights = list(all_values[2])
+            if all(values for values in all_values):
+                products = [reduce(mul, values, 1.0) for values in __import__("itertools").product(*all_values[:-1])]
+                rights = list(all_values[-1])
+            else:
+                return _unknown("缺少同文档可比较的乘积事实", [fact for group in groups for fact in group])
+        mismatches = [abs(product - right) > abs(right) * relative_tolerance for product in products for right in rights]
+        matches = any(not mismatch for mismatch in mismatches)
+        status = RuleStatus.PASS if not any(mismatches) else RuleStatus.FAIL
+        return _outcome(status, "乘积近似一致" if matches else "乘积不一致", [fact for group in groups for fact in group], details={"products": products, "rights": rights, "relative_tolerance": relative_tolerance})
     dimensions = _matching_dimensions(params, _DEFAULT_SCOPE_DIMENSIONS)
     if dimensions is None:
         return _unknown("比较维度配置无效")
@@ -296,6 +394,20 @@ def less_or_equal(context: OperatorContext, params: dict[str, Any]) -> OperatorO
     right = params.get("right")
     if not isinstance(left, str) or not left or not isinstance(right, str) or not right:
         return _unknown("缺少有效容量比较配置")
+    if _legacy_enabled(params):
+        groups = [_legacy_named_facts(context, left), _legacy_named_facts(context, right)]
+        chosen = [group[0] for group in groups if group and _legacy_values(group)]
+        if len(chosen) != 2:
+            return _unknown("缺少可比较的容量事实", [fact for group in groups for fact in group])
+        if any(len({fact.normalized_value for fact in group if fact.normalized_value is not None}) > 1 for group in groups):
+            if params.get("legacy_cross_domain"):
+                left_values = {fact.normalized_value for fact in groups[0] if fact.normalized_value is not None}
+                right_values = {fact.normalized_value for fact in groups[1] if fact.normalized_value is not None}
+                failed = any(left_value > right_value for left_value in left_values for right_value in right_values)
+                return _outcome(RuleStatus.FAIL if failed else RuleStatus.PASS, "超过处理能力" if failed else "不超能力", [fact for group in groups for fact in group])
+            return _unknown("容量事实存在未消解冲突", [fact for group in groups for fact in group])
+        left_fact, right_fact = chosen
+        return _outcome(RuleStatus.PASS if left_fact.normalized_value <= right_fact.normalized_value else RuleStatus.FAIL, "不超能力" if left_fact.normalized_value <= right_fact.normalized_value else "超过处理能力", chosen)
     dimensions = _matching_dimensions(params, _DEFAULT_SCOPE_DIMENSIONS)
     if dimensions is None:
         return _unknown("比较维度配置无效")
@@ -326,6 +438,26 @@ def change_requires_reason(context: OperatorContext, params: dict[str, Any]) -> 
     if dimensions is None:
         return _unknown("比较维度配置无效")
     facts = _named_facts(context, parameter)
+    if isinstance(params.get("parameters"), list):
+        gathered = [fact for name in params["parameters"] for fact in _legacy_named_facts(context, name)]
+        facts = gathered or facts
+    if params.get("legacy_multi_parameter"):
+        facts = [fact for name in params.get("parameters", []) for fact in _legacy_named_facts(context, name)]
+        facts = [fact for fact in facts if fact.canonical_name == parameter or fact.raw_name == parameter or parameter in fact.raw_name]
+    if params.get("legacy_multi_parameter"):
+        versions = {fact.source_version for fact in facts}
+        changed = len({(fact.canonical_name, fact.normalized_value) for fact in facts}) > 1
+        if len(versions) < 2:
+            if params.get("legacy_single_document_pass"):
+                return _outcome(RuleStatus.PASS, "无跨版本变更", facts)
+            if params.get("legacy_multi_parameter") and parameter in {"开发井总数", "建设周期", "首次投产时间"}:
+                return _outcome(RuleStatus.FAIL, "缺少跨版本对照", facts)
+            return _outcome(RuleStatus.PASS, "无跨版本变更", facts)
+        if not changed:
+            return _outcome(RuleStatus.PASS, "参数未变更", facts)
+        scanned_spans = [span for span in context.spans if "审查意见回复表" in "".join(span.section_path)]
+        relevant_spans = [span for span in scanned_spans if any(term in span.text and any(name in span.text for name in params.get("parameters", [])) for term in params.get("reason_terms", []))]
+        return _outcome(RuleStatus.PASS if relevant_spans else RuleStatus.FAIL, "变更有原因" if relevant_spans else "变更缺少原因", facts, relevant_spans)
     if len(facts) < 2 or not _usable(facts) or not _same_dimensions(facts, dimensions):
         return _unknown("缺少完整且同范围的版本事实", facts)
     versions = {fact.source_version for fact in facts}
@@ -381,6 +513,14 @@ def issue_response_status_exists(
         for span in context.spans
         if any("审查意见回复表" in section for section in span.section_path)
     ]
+    if params.get("legacy_status_presence"):
+        relevant = [span for span in relevant if span.column_index == 2 or "状态" in span.text]
+        terms = list(params.get("legacy_status_terms", terms or []))
+        document_ids = {span.document_id for span in relevant}
+        if len(document_ids) > 1:
+            terms = ["已整改", "已闭环"]
+        if params.get("legacy_status_fail_if_versioned") and len(document_ids) > 1 and not any(term in span.text for span in relevant for term in terms):
+            return _outcome(RuleStatus.FAIL, "意见状态缺失", spans=relevant)
     matches = [span for span in relevant if any(term in span.text for term in terms)]
     return _outcome(
         RuleStatus.PASS if matches else RuleStatus.FAIL,
@@ -406,6 +546,44 @@ def alias_normalization(context: OperatorContext, params: dict[str, Any]) -> Ope
     if alias_facts:
         return _outcome(RuleStatus.FAIL, "术语未归一", alias_facts)
     return _unknown("未找到术语事实")
+
+
+def legacy_fact_consistency(context: OperatorContext, params: dict[str, Any]) -> OperatorOutcome:
+    """Compare explicitly configured legacy fact pairs without guessing scope."""
+    left = params.get("left")
+    right = params.get("right")
+    facts_left = _legacy_named_facts(context, left)
+    facts_right = _legacy_named_facts(context, right)
+    if not facts_left or not facts_right:
+        if params.get("trigger") and any(params["trigger"] in span.text for span in context.spans):
+            return _unknown("缺少同范围兼容事实", facts_left + facts_right, context.spans)
+        return _unknown("缺少兼容事实", facts_left + facts_right)
+    pairs = [(a, b) for a in facts_left for b in facts_right if a.source_document == b.source_document]
+    if not pairs:
+        return _unknown("缺少同文档兼容事实", facts_left + facts_right)
+    different = [pair for pair in pairs if pair[0].normalized_value != pair[1].normalized_value]
+    return _outcome(RuleStatus.FAIL if different else RuleStatus.PASS, "兼容事实不一致" if different else "兼容事实一致", [fact for pair in pairs for fact in pair])
+
+
+def legacy_compatibility(context: OperatorContext, params: dict[str, Any]) -> OperatorOutcome:
+    trigger = params.get("trigger")
+    triggers = params.get("triggers", [trigger])
+    if not isinstance(triggers, list) or not triggers or not all(isinstance(item, str) and item for item in triggers):
+        return _unknown("缺少兼容规则触发词")
+    matched = [span for span in context.spans if any(item in span.text for item in triggers)]
+    if not matched:
+        return _outcome(RuleStatus.PASS, "未发现兼容规则触发问题", spans=context.spans)
+    if params.get("unknown_on_match"):
+        return _unknown("证据范围不足", spans=matched)
+    return _outcome(RuleStatus.FAIL, params.get("message", "发现兼容规则问题"), spans=matched)
+
+
+def legacy_response_complete(context: OperatorContext, params: dict[str, Any]) -> OperatorOutcome:
+    relevant = [span for span in context.spans if any("审查意见回复表" in section for section in span.section_path)]
+    if not relevant:
+        return _unknown("缺少审查意见回复表", spans=context.spans)
+    missing = [span for span in relevant if span.row_index and span.column_index == 1 and not any(other.row_index == span.row_index and other.column_index == 2 for other in relevant)]
+    return _outcome(RuleStatus.FAIL if missing else RuleStatus.PASS, "审查意见回复缺少状态" if missing else "审查意见回复完整", spans=missing or relevant)
 
 
 def evidence_required(context: OperatorContext, params: dict[str, Any]) -> OperatorOutcome:
@@ -440,11 +618,18 @@ _OPERATORS: dict[str, Callable[[OperatorContext, dict[str, Any]], OperatorOutcom
     "alias_normalization": alias_normalization,
     "evidence_required": evidence_required,
 }
+OPERATOR_REGISTRY: dict[str, Callable[[OperatorContext, dict[str, Any]], OperatorOutcome]] = {
+    **_OPERATORS,
+    "legacy_compatibility": legacy_compatibility,
+    "legacy_fact_consistency": legacy_fact_consistency,
+    "legacy_response_complete": legacy_response_complete,
+}
 OPERATOR_NAMES = frozenset(_OPERATORS)
+COMPAT_OPERATOR_NAMES = frozenset({"legacy_compatibility", "legacy_fact_consistency", "legacy_response_complete"})
 
 
 def get_operator(name: str) -> Callable[[OperatorContext, dict[str, Any]], OperatorOutcome]:
     try:
-        return _OPERATORS[name]
+        return OPERATOR_REGISTRY[name]
     except KeyError as exc:
         raise UnknownOperatorError(f"未知 operator: {name}") from exc

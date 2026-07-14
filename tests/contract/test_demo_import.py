@@ -76,6 +76,23 @@ def test_import_demo_valid_package_uses_production_loaders_without_copy(monkeypa
     assert not storage.exists()
 
 
+def test_import_demo_normalizes_legacy_rule_params(monkeypatch):
+    module = _load_import_demo()
+    root = _external_demo_root(module)
+    monkeypatch.setenv("REVIEW_DEMO_ROOT", str(root))
+    source = sorted((root / "plans").glob("DEMO-002*.docx"))[0]
+
+    imported = module.import_demo(source)
+    by_id = {rule.rule_id: rule for rule in imported.rules}
+
+    assert by_id["CONSISTENCY-001"].params["parameter"] == "开发井总数"
+    assert by_id["VERSION-001"].params["reason_terms"] == ["调整原因", "变更说明", "依据", "审查意见", "复核"]
+    assert by_id["VERSION-001"].params["parameters"]
+    assert by_id["VERSION-002"].params["status_terms"] == ["待整改", "整改中", "已整改", "已闭环"]
+    assert by_id["EVIDENCE-001"].params["min_evidence"] == 1
+    assert "legacy_match_dimensions" in by_id["CAPACITY-001"].params
+
+
 def test_import_demo_rejects_non_docx_and_missing_files(tmp_path: Path):
     module = _load_import_demo()
     with pytest.raises(module.DemoImportError, match="DOCX"):

@@ -7,15 +7,15 @@ from app.domain.schemas import ParameterFact, SourceSpan
 from app.parsers.docx_parser import ParsedDocument
 
 
-_NUMBER = r"[-+]?\d[\d,]*(?:\.\d+)?"
+_NUMBER = r"[-+]?\d[\d,]*(?:\.\d+)?(?:-\d{1,2})?"
 # Keep the unit vocabulary deliberately explicit. Table units are always retained
 # verbatim; body extraction only claims units it can identify unambiguously.
 _BODY = re.compile(
     rf"(?P<name>[一-鿿A-Za-z0-9/（）()]+?)(?:为|：|:)\s*"
     rf"(?P<value>{_NUMBER})\s*"
-    # A complete supported unit is required. An optional unit would turn a
-    # date such as ``投产时间：2028年03月`` into a false 2028 fact.
-    rf"(?P<unit>万m³/d|万m3/d|m³/d|m3/d|万吨/年|个月|口|座|%)"
+    # A complete supported unit is required. Dates are retained as text facts
+    # with an explicit date marker; numeric normalization remains unavailable.
+    rf"(?P<unit>亿m³/a|亿m3/a|万m³/d|万m3/d|m³/d|m3/d|万吨/年|个月|月|口|座|%|—)"
 )
 
 _HEADER_ALIASES = {
@@ -33,6 +33,9 @@ _HEADER_ALIASES = {
 
 def _number(value: str) -> float | None:
     try:
+        if re.fullmatch(r"\d{4}-\d{1,2}", value.strip()):
+            year, month = value.strip().split("-")
+            return float(int(year) * 12 + int(month))
         return float(value.replace(",", ""))
     except ValueError:
         return None
