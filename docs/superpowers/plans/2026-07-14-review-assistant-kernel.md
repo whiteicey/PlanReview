@@ -24,6 +24,20 @@
 - 每个 operator 是纯函数 `(facts, spans, cfg) → RuleResult`，禁用 `eval`/`exec`/动态导入执行规则表达式。
 - 所有规则/术语/规范/金标准均标 `DEMO_ONLY`，是虚构演示数据，不代表任何正式规范。
 
+## First-Principles Amendment (2026-07-14)
+
+本节是对后续任务中旧示例代码的**绑定修订**。实现者必须以本节和对应 Interfaces 为准；旧示例若与本节冲突，视为被替换，不能照抄。
+
+1. **持久化是真持久化**：`Task 17` 必须创建 SQLAlchemy 2.x ORM 表并 `commit/refresh`；禁止用进程字典冒充数据库。重启进程后 `get_run` 仍须能从 SQLite 恢复。至少有 `cases`、`review_runs`、`findings`、`rule_results`、`recycle_bin` 五类记录；JSON 字段只存脱敏结构化内容，不存源文档正文、完整请求体或密钥。
+2. **DOCX 顺序是真实顺序**：`Task 6` 必须通过 `Document.element.body.iterchildren()` 按 XML 顺序遍历 `w:p` 与 `w:tbl`；不能先遍历全部段落再遍历全部表格。表格单元格继承其在 XML 中所在位置的当前 `section_path`。
+3. **比较键不丢维度**：`ParameterFact.comparison_key()` 必须返回五元组 `(canonical_name, subject, time_scope, statistical_scope, condition)`。`all_equal` 必须依据 rule 的 `match_dimensions` 先筛选、再验证所有参与事实的维度一致；不同时间/统计口径/工况不得因为各自被分组后变成 PASS。缺少必需维度返回 UNKNOWN。`diff_parameters` 必须先按 `canonical_name + subject` 配对，再发现 scope/condition 不一致并返回 `UNKNOWN_SCOPE`，不能把它们伪装成 ADDED/REMOVED。
+4. **案例隔离**：上传接口先生成不可预测 `case_id`（UUID4），再使用 `safe_join(storage_root, "cases", case_id, "documents", f"{sha256}-{safe_name}")` 写入；同名文件不能覆盖其他案例或同案例历史文件。案例元数据、文件哈希和相对路径写入 SQLite。
+5. **流水线失败可观察**：实现 `PipelineStage` 枚举和 `StageRecord(stage, started_at, ended_at, status, error)`；任何阶段异常都追加 `FAILED` 记录并保留异常类型/脱敏消息，不能继续调用后续阶段或伪造 READY。`ReviewRun` 的最终状态必须是 `READY_FOR_HUMAN_REVIEW` 或 `FAILED`。
+6. **API 必须闭环**：除 health/config/upload 外，必须实现 `POST /api/cases/{case_id}/review`、`GET /api/cases/{case_id}/findings`、`PATCH /api/findings/{finding_id}`、`GET /api/cases/{case_id}/exports/{format}`（`xlsx|docx|anonymous`）以及删除确认端点；每个端点必须使用持久化 repository，不能仅返回硬编码摘要。
+7. **Golden fixture 必须可定位且诚实**：测试定义 `DEMO_ROOT`，优先读取 `REVIEW_DEMO_ROOT`，否则按仓库外层候选路径查找；每个 case 映射到明确的 DEMO DOCX 文件名。找不到外部源文件时只允许 `pytest.skip`，不得构造假数据冒充 golden 通过。
+8. **危险模式扫描不扫描自证字符串**：验收扫描使用 Python `ast`/`tokenize` 检查生产代码中的 `eval`/`exec` 调用，排除 `tests/` 与扫描脚本自身；不能用包含 `"eval("` 字面量的全库字符串断言。
+9. **API 路径覆盖**：必须有 contract test 验证上传→review→findings→PATCH review→每种 export，并验证同名文件不覆盖；非 DOCX 415、超大文件 413、越界路径和删除二次确认也必须有测试。
+
 ---
 
 ## Task List Overview
@@ -651,9 +665,11 @@ git commit -m "feat: domain exceptions"
 
 - Create: `review/app/storage/__init__.py`（空）
 - Create: `review/app/storage/paths.py`
+- Create: `review/app/storage/case_files.py`
 - Create: `review/app/storage/hashing.py`
 - Test: `review/tests/security/__init__.py`（空）
 - Test: `review/tests/security/test_paths.py`
+- Test: `review/tests/security/test_case_files.py`
 - Test: `review/tests/unit/test_hashing.py`
 
 **Interfaces:**
@@ -662,6 +678,7 @@ git commit -m "feat: domain exceptions"
 - Produces:
   - `paths.safe_join(root: Path, *parts: str) -> Path`：拒绝绝对路径、`..`、盘符跳转，越界抛 `PathTraversalError`；返回规范化绝对路径。
   - `paths.validate_upload_name(filename: str, allowed: frozenset[str]) -> str`：取 basename，校验扩展名在白名单否则抛 `UnsupportedFileTypeError`，返回安全文件名。
+  - `case_files.store_upload(storage_root: Path, case_id: str, filename: str, data: bytes) -> StoredFile`：UUID4 案例目录隔离；目标名 `{sha256}-{safe_name}`，同名/同 hash 不覆盖已有字节；返回仅含 storage 相对路径、sha256、size、safe_name 的 `StoredFile`。
   - `hashing.sha256_bytes(data: bytes) -> str`、`hashing.sha256_text(text: str) -> str`（十六进制小写）。
 
 - [ ] **Step 1: 写失败测试 `tests/security/test_paths.py`**
@@ -781,11 +798,33 @@ def sha256_text(text: str) -> str:
 Run: `cd review && python -m pytest tests/security/test_paths.py tests/unit/test_hashing.py -v`
 Expected: PASS，8 passed。
 
-- [ ] **Step 7: 提交**
+- [ ] **Step 7: 写案例隔离测试与实现**
+
+```python
+# tests/security/test_case_files.py
+from app.storage.case_files import store_upload
+
+def test_upload_is_case_isolated_and_never_overwrites(tmp_path):
+    first = store_upload(tmp_path, "case-a", "方案.docx", b"a")
+    second = store_upload(tmp_path, "case-b", "方案.docx", b"b")
+    assert first.storage_relative_path != second.storage_relative_path
+    assert first.sha256 != second.sha256
+    assert (tmp_path / first.storage_relative_path).read_bytes() == b"a"
+    assert (tmp_path / second.storage_relative_path).read_bytes() == b"b"
+```
+
+`case_files.py` 必须生成 `StoredFile` dataclass，使用 `safe_join`、`sha256_bytes`，并用 `O_CREAT|O_EXCL` 或等价存在性校验避免覆盖。
+
+- [ ] **Step 8: 运行确认通过**
+
+Run: `cd review && python -m pytest tests/security tests/unit/test_hashing.py -v`
+Expected: PASS。
+
+- [ ] **Step 9: 提交**
 
 ```bash
 cd review && git add app/storage/ tests/security/ tests/unit/test_hashing.py
-git commit -m "feat: path-traversal guard + file hashing"
+git commit -m "feat: path-traversal guard case isolation and file hashing"
 ```
 
 ---
@@ -1032,7 +1071,7 @@ git commit -m "feat: add safe section extraction and selectors"
 **Interfaces:**
 
 - Consumes: `ParsedDocument`。
-- Produces: `extract_parameter_facts(parsed: ParsedDocument, source_version: str | None = None) -> list[ParameterFact]`。识别表头 `参数名称/数值/单位/对象/时间/阶段/统计口径`；正文识别「名称为数值单位」或「名称：数值单位」。保留原始字符串、SourceSpan、抽取方式，不在此处擅自推断缺失比较维度。
+- Produces: `extract_parameter_facts(parsed: ParsedDocument, source_version: str | None = None) -> list[ParameterFact]`。识别表头 `参数名称/数值/单位/对象/时间/阶段/统计口径`；正文识别「名称为数值单位」或「名称：数值单位」。保留原始字符串、SourceSpan、抽取方式，不在此处擅自推断缺失比较维度。正文和表格中的同一参数必须各自保留独立 SourceSpan/ParameterFact，不能为了去重丢掉跨位置冲突证据。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -1702,6 +1741,7 @@ git commit -m "feat: whitelist ten pure three-valued rule operators"
 **Interfaces:**
 
 - Produces: `apply_evidence_gate(outcome: OperatorOutcome, rule: RuleDefinition) -> OperatorOutcome`；`RuleEngine.evaluate(rules: list[RuleDefinition], facts: list[ParameterFact], spans: list[SourceSpan]) -> list[RuleResult]`。
+- `PipelineStage` 枚举必须覆盖 `CREATED`, `VALIDATING_FILES`, `PAIRING_FILES`, `PARSING`, `BUILDING_SPANS`, `EXTRACTING_PARAMETERS`, `NORMALIZING_FACTS`, `RUNNING_RULES`, `RETRIEVING_KNOWLEDGE`, `CALLING_MODEL`, `VALIDATING_MODEL_OUTPUT`, `MERGING_FINDINGS`, `WAITING_HUMAN_REVIEW`, `COMPLETED`, `FAILED`；每个 `StageRecord` 记录 stage、开始/结束时间、状态和脱敏错误。
 - `on_missing=unknown`：UNKNOWN 保持 UNKNOWN；`fail`：UNKNOWN 转 FAIL；`block`：保持 UNKNOWN 且 `details["blocked"] is True`、`needs_human_review=True`。只有 operator 结果为 FAIL 时才形成 FAIL；不能把缺证据写成 PASS。
 - `VERSION-001` 应由 `on_missing=fail` 的规则得到 `FAIL + needs_human_review=True`（用 rule category/version-change 或 `rule_id` 特判不改变 RuleStatus）。
 
@@ -1816,11 +1856,12 @@ git commit -m "feat: enforce evidence gate and three-valued rule engine"
 - Create: `review/app/diff/parameter_diff.py`
 - Test: `review/tests/unit/test_pairing.py`
 - Test: `review/tests/unit/test_parameter_diff.py`
+- Test: `review/tests/contract/test_pairing_confirmation.py`
 
 **Interfaces:**
 
-- Produces: `pair_documents(files: list[str]) -> list[tuple[str, str]]`（按文件名中的 `V1/V2` 或日期排序，相邻版本配对；不足两版返回空）；`ParameterDifference(key: tuple, old: ParameterFact | None, new: ParameterFact | None, kind: DiffKind)`；`diff_parameters(old: list[ParameterFact], new: list[ParameterFact]) -> list[ParameterDifference]`。
-- 比较 key 缺少 subject/time_scope/statistical_scope 时，`kind=DiffKind.UNKNOWN_SCOPE`，即使数值相同也不返回 UNCHANGED；单位已统一后才比较数值。
+- Produces: `pair_documents(files: list[str]) -> list[tuple[str, str]]`（按文件名中的 `V1/V2` 或日期排序，相邻版本配对；不足两版返回空；同时返回/记录配对置信度时必须遵守文件名 0.55、标题/目录 0.25、文本指纹 0.20 的评分与 ≥0.80/0.50—0.80/<0.50 阈值；未人工确认不得进行版本比对）；`ParameterDifference(key: tuple, old: ParameterFact | None, new: ParameterFact | None, kind: DiffKind)`；`diff_parameters(old: list[ParameterFact], new: list[ParameterFact]) -> list[ParameterDifference]`。
+- 比较 key 缺少 subject/time_scope/statistical_scope/condition 时，`kind=DiffKind.UNKNOWN_SCOPE`，即使数值相同也不返回 UNCHANGED；单位已统一后才比较数值。实现必须先按 `(canonical_name, subject)` 配对，再检查 time_scope、statistical_scope、condition；scope 改变不能伪装成 ADDED/REMOVED。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -2026,11 +2067,12 @@ git commit -m "feat: deterministic local MockProvider and LLM contract"
 - Create: `review/app/review/pipeline.py`
 - Test: `review/tests/unit/test_reconcile.py`
 - Test: `review/tests/unit/test_pipeline.py`
+- Test: `review/tests/unit/test_pipeline_failure.py`
 
 **Interfaces:**
 
 - Produces: `rule_results_to_findings(results: list[RuleResult], spans: dict[str, SourceSpan]) -> list[Finding]`；`merge_findings(rule_findings, llm_findings) -> list[Finding]`；`ReviewPipeline.run(case_id: str, documents: list[ParsedDocument], rules: list[RuleDefinition], provider: LLMProvider) -> ReviewRun`。`ReviewRun` 还必须保存 `facts: list[ParameterFact]`，供导出与金标准精确断言。
-- 去重 key = `(category, parameter, normalized title)`；规则为证据主导，LLM 只能补充描述，不能覆盖规则 FAIL/UNKNOWN，也不能把 UNKNOWN 变 PASS。`ReviewRun` 记录 `case_id`, `rule_results`, `findings`, `stage_states`。
+- 去重 key = `(category, parameter, normalized title)`；规则为证据主导，LLM 只能补充描述，不能覆盖规则 FAIL/UNKNOWN，也不能把 UNKNOWN 变 PASS。`ReviewRun` 记录 `case_id`, `facts`, `rule_results`, `findings`, `stage_records`, `final_status`；任一阶段异常都产出 `FAILED`，不继续后续步骤。
 - pipeline 状态固定：`UPLOADED → PARSED → EXTRACTED → NORMALIZED → RULE_CHECKED → LLM_REVIEWED → RECONCILED → READY_FOR_HUMAN_REVIEW`，任一步失败为 `FAILED`，不得跳过证据记录。
 
 - [ ] **Step 1: 写失败测试**
@@ -2156,14 +2198,15 @@ git commit -m "feat: reconcile rule and Mock LLM findings through review pipelin
 
 - Create: `review/app/persistence/__init__.py`（空）
 - Create: `review/app/persistence/db.py`
+- Create: `review/app/persistence/models.py`
 - Create: `review/app/persistence/repository.py`
 - Test: `review/tests/unit/test_repository.py`
 - Test: `review/tests/security/test_no_secrets_in_persistence.py`
 
 **Interfaces:**
 
-- Produces: `create_session(db_path: Path) -> Session`；`ReviewRepository(session)`，方法 `save_run(run: ReviewRun) -> str`、`get_run(run_id: str) -> ReviewRun | None`、`update_finding_review(finding_id: str, status: ReviewStatus, note: str | None) -> None`、`delete_case_to_recycle_bin(case_id: str) -> None`。
-- SQLite 只保存案例元数据、规则结果、Finding、复核状态、脱敏统计；不保存 API key、完整外部请求体、原始 DOCX 内容。原文件路径保存为 storage 相对路径，禁止绝对路径。
+- Produces: `create_session(db_path: Path) -> Session`；`ReviewRepository(session)`，方法 `save_case(case: CaseRecord) -> str`、`save_run(run: ReviewRun) -> str`、`get_run(run_id: str) -> ReviewRun | None`、`update_finding_review(finding_id: str, status: ReviewStatus, note: str | None) -> None`、`delete_case_to_recycle_bin(case_id: str) -> None`、`permanently_delete_case(case_id: str, confirmation: str) -> None`。所有写入必须 `session.commit()`，读取来自数据库查询而非内存缓存。
+- SQLite 只保存案例元数据、文件 SHA-256、storage 相对路径、规则结果、Finding、复核状态、脱敏统计；不保存 API key、完整外部请求体、原始 DOCX 内容。原文件路径禁止绝对路径。必须使用 SQLAlchemy ORM 表与真实事务，重启进程后仍可读取。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -2176,13 +2219,15 @@ from app.review.pipeline import ReviewRun
 
 
 def test_round_trip_run_and_human_review(tmp_path):
-    repo = ReviewRepository(create_session(tmp_path / "review.db"))
+    db = tmp_path / "review.db"
+    repo = ReviewRepository(create_session(db))
     run = ReviewRun("CASE-1", findings=[Finding(finding_id="F1", origin=Origin.RULE, category="c", severity=Severity.HIGH, title="t", description="d", suggestion="s", evidence_span_ids=[], needs_human_review=True)])
     repo.save_run(run)
-    loaded = repo.get_run("CASE-1")
+    # 新建 repository/Session，证明数据确实来自 SQLite。
+    loaded = ReviewRepository(create_session(db)).get_run("CASE-1")
     assert loaded and loaded.findings[0].finding_id == "F1"
     repo.update_finding_review("F1", ReviewStatus.CONFIRMED, "专家确认")
-    assert repo.get_run("CASE-1").findings[0].review_status is ReviewStatus.CONFIRMED
+    assert ReviewRepository(create_session(db)).get_run("CASE-1").findings[0].review_status is ReviewStatus.CONFIRMED
 
 
 def test_repository_never_accepts_secret_field(tmp_path):
@@ -2397,16 +2442,22 @@ git commit -m "feat: reject unsafe external base URLs and redact logs"
 
 - Create: `review/app/api/__init__.py`（空）
 - Create: `review/app/api/routes.py`
+- Create: `review/app/api/schemas.py`
 - Create: `review/app/main.py`
 - Create: `review/web/index.html`
 - Create: `review/web/app.js`
 - Create: `review/web/styles.css`
 - Test: `review/tests/contract/test_api.py`
+- Test: `review/tests/contract/test_api_acceptance_path.py`
 - Test: `review/tests/security/test_api_local_only.py`
+
+**API acceptance contract:**
+
+测试必须覆盖：upload DOCX → review → findings → PATCH finding review status/note → xlsx/docx/anonymous 三种导出；同时覆盖 PDF 415、>100MB 413、同名文件不覆盖、删除二次确认和持久化重启后仍可读。
 
 **Interfaces:**
 
-- Produces endpoints：`GET /api/health` → `{"status":"ok","disclaimer":"AI 初审结果，不是正式审查结论"}`；`GET /api/config` → 不含 key 的安全配置；`POST /api/cases`（multipart DOCX）→ `case_id` 与文件元数据；`POST /api/cases/{case_id}/review` → `ReviewRun` 摘要；`GET /api/cases/{case_id}/findings` → Finding 列表；`PATCH /api/findings/{finding_id}` → 专家复核状态/备注；`GET /` → 静态展示页。所有输入按 JSON/Pydantic 校验，非 DOCX 返回 415 并写「暂不支持，仅处理文本型 DOCX」。
+- Produces endpoints：`GET /api/health` → `{"status":"ok","disclaimer":"AI 初审结果，不是正式审查结论"}`；`GET /api/config` → 不含 key 的安全配置；`POST /api/cases`（multipart DOCX）→ UUID4 `case_id` 与文件元数据；`POST /api/cases/{case_id}/review` → `ReviewRun` 摘要；`GET /api/cases/{case_id}/findings` → Finding 列表；`PATCH /api/findings/{finding_id}` → 专家复核状态/备注；`GET /api/cases/{case_id}/exports/{format}`（`xlsx|docx|anonymous`）；`POST /api/cases/{case_id}/delete-confirm` 与 `DELETE /api/cases/{case_id}`；`GET /` → 静态展示页。所有输入按 JSON/Pydantic 校验，非 DOCX 返回 415 并写「暂不支持，仅处理文本型 DOCX」；同名文件不得覆盖。
 - `main.py` 必须 `FastAPI()` + `StaticFiles(directory=web)`，启动配置只能从 `get_settings()` 得到 host，默认 127.0.0.1；启动文档中写 `uvicorn app.main:app --host 127.0.0.1 --port 8765`。
 
 - [ ] **Step 1: 写失败测试**
@@ -2613,6 +2664,10 @@ git commit -m "feat: export findings with disclaimer and anonymous package guard
 - Modify: `review/README.md`
 - Test: `review/tests/contract/test_demo_import.py`
 
+**DEMO_ROOT resolution:**
+
+`DEMO_ROOT = Path(os.environ["REVIEW_DEMO_ROOT"])` when set; otherwise search only these explicit candidates in order: `Path(__file__).parents[3] / "本地版示例数据包"`, `Path.cwd().parent / "本地版示例数据包"`; if no candidate exists, raise a clear test skip, never synthesize a document.
+
 **Interfaces:**
 
 - `scripts/import_demo.py`：从 `本地版示例数据包/` 读取规则/术语，并从外部示例 DOCX 路径导入；不复制或提交源文件到 `storage/`；缺少文件/非 DOCX 明确报错。
@@ -2687,6 +2742,7 @@ git commit -m "docs: add local demo workflow and loopback startup"
 
 **Files:**
 
+- Create: `review/tests/golden/conftest.py`（定义 `DEMO_ROOT`、`run_golden_case`、精确文件映射）
 - Create: `review/tests/golden/test_demo_golden.py`
 - Create: `review/tests/golden/golden_cases_demo.expected.jsonl`
 - Create: `review/docs/golden-status-deviation.md`
@@ -2765,7 +2821,7 @@ def test_demo_exact_parameter_facts(run_golden_case):
 Run: `cd review && python -m pytest tests/golden/test_demo_golden.py -v`
 Expected: FAIL initially because fixture adapter / corrected expected file are not present。
 
-- [ ] **Step 4: 写 fixture adapter 与完整断言**
+- [ ] **Step 4: 写 `tests/golden/conftest.py` fixture adapter 与完整断言**
 
 fixture 必须：
 
@@ -2853,10 +2909,10 @@ Expected: FAIL until hardening/documentation is present。
 Run: `cd review && python -m pytest -q`
 Expected: 核心单元/安全/契约测试 PASS；外部 DEMO 未提供的 golden 显示 SKIPPED；任何 FAIL 必须先修代码/测试，不能篡改期望值。
 
-- [ ] **Step 5: 自检危险模式**
+- [ ] **Step 5: 自检危险模式（只扫描生产 AST）**
 
-Run: `cd review && python -c "from pathlib import Path; s='\\n'.join(p.read_text(encoding='utf-8', errors='ignore') for p in Path('.').rglob('*.py')); assert 'eval(' not in s and 'exec(' not in s"
-Expected: no output and exit code 0。
+Run: `cd review && python -c "import ast; from pathlib import Path; files=[p for p in Path('app').rglob('*.py')]; bad=[]; [bad.append(str(p)) for p in files if any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in {'eval','exec'} for n in ast.walk(ast.parse(p.read_text(encoding='utf-8'))))]; assert not bad, bad"`
+Expected: no output and exit code 0；不扫描 tests/ 与本扫描脚本自身。
 
 - [ ] **Step 6: 记录真实报告并提交**
 
