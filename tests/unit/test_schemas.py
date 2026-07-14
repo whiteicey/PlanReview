@@ -107,6 +107,7 @@ def test_stage_record_preserves_stage_timing_status_and_safe_error():
         started_at=started,
         ended_at=started,
         status="completed",
+        exception_type=None,
         error="sanitized failure message",
     )
 

@@ -53,6 +53,7 @@ Changed files in amendment:
 ```text
 app/pipeline.py
 app/domain/schemas.py
+tests/unit/test_schemas.py
 tests/unit/test_pipeline.py
 tests/unit/test_engine.py
 .superpowers/sdd/task-13-report.md
