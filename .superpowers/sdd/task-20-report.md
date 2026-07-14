@@ -15,7 +15,8 @@ uvicorn app.main:app --host 127.0.0.1 --port 8765
 ## Commits
 
 - `34b11b1 feat: add local FastAPI review workflow`
-- Pending review-fix commit.
+- `b19ac5e fix: harden API uploads exports and deletion`
+- `412a9e7 docs: record Task 20 review fixes`
 
 ## Tests and output
 
