@@ -20,7 +20,11 @@ def rr(status: RuleStatus, rule_id: str = "R1") -> RuleResult:
 
 def test_rule_fail_becomes_finding_and_unknown_requires_human_review() -> None:
     findings = rule_results_to_findings(
-        [rr(RuleStatus.FAIL), rr(RuleStatus.UNKNOWN, "R2")], {}
+        [
+            rr(RuleStatus.FAIL),
+            rr(RuleStatus.UNKNOWN, "R2").model_copy(update={"parameter": "处理能力"}),
+        ],
+        {"s1": None},
     )
 
     assert len(findings) == 2
@@ -31,7 +35,7 @@ def test_rule_fail_becomes_finding_and_unknown_requires_human_review() -> None:
 
 
 def test_duplicate_llm_finding_cannot_overwrite_rule_evidence_or_description() -> None:
-    rule_finding = rule_results_to_findings([rr(RuleStatus.FAIL)], {})[0]
+    rule_finding = rule_results_to_findings([rr(RuleStatus.FAIL)], {"s1": None})[0]
     llm = Finding(
         finding_id="L",
         origin=Origin.LLM,
@@ -51,8 +55,38 @@ def test_duplicate_llm_finding_cannot_overwrite_rule_evidence_or_description() -
     assert merged[0].origin is Origin.HYBRID
     assert merged[0].description == "m"
     assert merged[0].severity is Severity.HIGH
+    assert merged[0].evidence_span_ids == ["s1"]
+    assert merged[0].original_ai_snapshot["llm_description"] == "llm"
+    assert merged[0].needs_human_review is True
+
+
+def test_rule_evidence_must_be_supplied() -> None:
+    from pytest import raises
+
+    with raises(ValueError, match="unknown evidence"):
+        rule_results_to_findings([rr(RuleStatus.FAIL)], {})
+
+
+def test_rule_side_duplicates_are_deduplicated_in_input_order() -> None:
+    first = rr(RuleStatus.FAIL, "R1")
+    second = rr(RuleStatus.UNKNOWN, "R2")
+    second = second.model_copy(update={"evidence_span_ids": ["s2"]})
+
+    merged = rule_results_to_findings([first, second], {"s1": None, "s2": None})
+
+    assert len(merged) == 1
+    assert merged[0].rule_id == "R1"
     assert merged[0].evidence_span_ids == ["s1", "s2"]
     assert merged[0].needs_human_review is True
+
+
+def test_category_is_not_over_normalized_for_deduplication() -> None:
+    first = rr(RuleStatus.FAIL)
+    second = rr(RuleStatus.FAIL, "R2").model_copy(update={"category": "capacity!"})
+
+    merged = rule_results_to_findings([first, second], {"s1": None})
+
+    assert len(merged) == 2
 
 
 def test_duplicate_llm_findings_are_deduplicated_without_losing_evidence() -> None:

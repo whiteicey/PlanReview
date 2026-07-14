@@ -9,13 +9,13 @@ from app.domain.schemas import Finding, RuleResult, SourceSpan
 
 
 def _normalize_title(value: str) -> str:
-    """Normalize textual identity without using fuzzy semantic matching."""
-    return re.sub(r"[^\w]+", "", value.casefold())
+    """Normalize title whitespace/case only; category identity is exact."""
+    return re.sub(r"\s+", " ", value.casefold().strip())
 
 
 def _finding_key(finding: Finding) -> tuple[str, str | None, str]:
     return (
-        _normalize_title(finding.category),
+        finding.category,
         finding.parameter,
         _normalize_title(finding.title),
     )
@@ -46,27 +46,42 @@ def rule_results_to_findings(
     available to callers; IDs are copied directly from the already-gated rule
     result rather than reconstructed or inferred.
     """
-    del spans
     findings: list[Finding] = []
+    indexes: dict[tuple[str, str | None, str], int] = {}
     for index, result in enumerate(results):
         if result.status is RuleStatus.PASS:
             continue
-        findings.append(
-            Finding(
-                finding_id=f"rule-{result.rule_id}-{index}",
-                origin=Origin.RULE,
-                category=result.category,
-                severity=result.severity,
-                parameter=result.parameter,
-                title=_rule_title(result),
-                description=result.message,
-                suggestion="请补充证据并由专家复核",
-                rule_id=result.rule_id,
-                evidence_span_ids=list(result.evidence_span_ids),
-                needs_human_review=(
-                    result.needs_human_review or result.status is RuleStatus.UNKNOWN
+        unsupported = set(result.evidence_span_ids).difference(spans)
+        if unsupported:
+            raise ValueError("rule result references unknown evidence span")
+        finding = Finding(
+            finding_id=f"rule-{result.rule_id}-{index}",
+            origin=Origin.RULE,
+            category=result.category,
+            severity=result.severity,
+            parameter=result.parameter,
+            title=_rule_title(result),
+            description=result.message,
+            suggestion="请补充证据并由专家复核",
+            rule_id=result.rule_id,
+            evidence_span_ids=list(result.evidence_span_ids),
+            needs_human_review=(
+                result.needs_human_review or result.status is RuleStatus.UNKNOWN
+            ),
+        )
+        key = _finding_key(finding)
+        if key not in indexes:
+            indexes[key] = len(findings)
+            findings.append(finding)
+            continue
+        existing = findings[indexes[key]]
+        findings[indexes[key]] = existing.model_copy(
+            update={
+                "evidence_span_ids": _deduplicated_evidence(
+                    existing.evidence_span_ids, finding.evidence_span_ids
                 ),
-            )
+                "needs_human_review": existing.needs_human_review or finding.needs_human_review,
+            }
         )
     return findings
 
@@ -81,6 +96,8 @@ def merge_findings(
     implication, severity, description, suggestion, or evidence.  A matched
     model finding marks the result hybrid and always requires human review.
     """
+    if any(not finding.evidence_span_ids for finding in llm_findings):
+        raise ValueError("LLM finding requires at least one evidence span")
     merged = list(rule_findings)
     indexes = {_finding_key(finding): index for index, finding in enumerate(merged)}
     for llm_finding in llm_findings:
@@ -92,16 +109,27 @@ def merge_findings(
             continue
 
         base = merged[index]
-        updates = {
-            "evidence_span_ids": _deduplicated_evidence(
-                base.evidence_span_ids, llm_finding.evidence_span_ids
-            ),
-            "needs_human_review": base.needs_human_review or llm_finding.needs_human_review,
-        }
         if base.origin in {Origin.RULE, Origin.HYBRID}:
-            # The rule result remains authoritative; do not let the model change
-            # the assessment text, severity, recommendation, or review state.
-            updates["origin"] = Origin.HYBRID
-            updates["needs_human_review"] = True
-        merged[index] = base.model_copy(update=updates)
+            # Keep rule evidence exact. The model's evidence cannot expand the
+            # supported rule conclusion; its prose is retained separately.
+            supplement = llm_finding.description
+            snapshot = dict(base.original_ai_snapshot)
+            snapshot["llm_description"] = supplement
+            snapshot["llm_suggestion"] = llm_finding.suggestion
+            merged[index] = base.model_copy(
+                update={
+                    "origin": Origin.HYBRID,
+                    "needs_human_review": True,
+                    "original_ai_snapshot": snapshot,
+                }
+            )
+        else:
+            merged[index] = base.model_copy(
+                update={
+                    "evidence_span_ids": _deduplicated_evidence(
+                        base.evidence_span_ids, llm_finding.evidence_span_ids
+                    ),
+                    "needs_human_review": base.needs_human_review or llm_finding.needs_human_review,
+                }
+            )
     return merged

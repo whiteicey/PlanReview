@@ -83,6 +83,8 @@ class ReviewPipeline:
                 )
             except (TypeError, ValueError) as exc:
                 raise ValueError("LLM output failed evidence validation") from exc
+            if any(not item["evidence_span_ids"] for item in validated):
+                raise ValueError("LLM finding requires at least one evidence span")
             llm_findings.extend(
                 Finding(
                     finding_id=f"llm-{index}",

@@ -16,18 +16,18 @@ def test_on_missing_values():
     assert OnMissing("block") is OnMissing.BLOCK
 
 
-def test_pipeline_stage_covers_the_review_lifecycle():
+def test_pipeline_stage_preserves_legacy_and_current_lifecycle():
     assert {stage.name for stage in PipelineStage} == {
-        "UPLOADED",
-        "PARSED",
-        "EXTRACTED",
-        "NORMALIZED",
-        "RULE_CHECKED",
-        "LLM_REVIEWED",
-        "RECONCILED",
-        "READY_FOR_HUMAN_REVIEW",
-        "FAILED",
+        "CREATED", "VALIDATING_FILES", "PAIRING_FILES", "PARSING",
+        "BUILDING_SPANS", "EXTRACTING_PARAMETERS", "NORMALIZING_FACTS",
+        "RUNNING_RULES", "RETRIEVING_KNOWLEDGE", "CALLING_MODEL",
+        "VALIDATING_MODEL_OUTPUT", "MERGING_FINDINGS", "WAITING_HUMAN_REVIEW",
+        "COMPLETED", "UPLOADED", "PARSED", "EXTRACTED", "NORMALIZED",
+        "RULE_CHECKED", "LLM_REVIEWED", "RECONCILED",
+        "READY_FOR_HUMAN_REVIEW", "FAILED",
     }
+    assert PipelineStage.PARSING.value == "PARSING"
+    assert PipelineStage.READY_FOR_HUMAN_REVIEW.value == "READY_FOR_HUMAN_REVIEW"
 
 
 def test_enum_str_roundtrip():

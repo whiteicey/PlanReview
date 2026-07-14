@@ -37,8 +37,25 @@ class OnMissing(str, Enum):
 
 
 class PipelineStage(str, Enum):
-    """Ordered lifecycle stages for one review run."""
+    """Legacy stages plus the explicit review lifecycle stages."""
 
+    # Legacy lifecycle members remain source-compatible for existing callers.
+    CREATED = "CREATED"
+    VALIDATING_FILES = "VALIDATING_FILES"
+    PAIRING_FILES = "PAIRING_FILES"
+    PARSING = "PARSING"
+    BUILDING_SPANS = "BUILDING_SPANS"
+    EXTRACTING_PARAMETERS = "EXTRACTING_PARAMETERS"
+    NORMALIZING_FACTS = "NORMALIZING_FACTS"
+    RUNNING_RULES = "RUNNING_RULES"
+    RETRIEVING_KNOWLEDGE = "RETRIEVING_KNOWLEDGE"
+    CALLING_MODEL = "CALLING_MODEL"
+    VALIDATING_MODEL_OUTPUT = "VALIDATING_MODEL_OUTPUT"
+    MERGING_FINDINGS = "MERGING_FINDINGS"
+    WAITING_HUMAN_REVIEW = "WAITING_HUMAN_REVIEW"
+    COMPLETED = "COMPLETED"
+
+    # Current review run lifecycle.
     UPLOADED = "UPLOADED"
     PARSED = "PARSED"
     EXTRACTED = "EXTRACTED"
