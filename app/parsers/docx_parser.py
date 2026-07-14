@@ -9,6 +9,7 @@ from docx.table import Table
 from docx.text.paragraph import Paragraph
 
 from app.domain.enums import BlockType
+from app.domain.exceptions import ParseError
 from app.domain.schemas import SourceSpan
 from app.storage.hashing import sha256_text
 
@@ -28,7 +29,10 @@ class DocxParser:
     def parse(self, path: Path, document_id: str | None = None) -> ParsedDocument:
         path = Path(path)
         resolved_document_id = document_id or path.stem
-        document = Document(path)
+        try:
+            document = Document(path)
+        except Exception as exc:
+            raise ParseError("Unable to parse DOCX document") from exc
 
         spans: list[SourceSpan] = []
         paragraphs: list[SourceSpan] = []

@@ -1,8 +1,10 @@
 from pathlib import Path
 
 from docx import Document
+import pytest
 
 from app.domain.enums import BlockType
+from app.domain.exceptions import ParseError
 from app.parsers.docx_parser import DocxParser
 
 
@@ -42,6 +44,31 @@ def test_parser_is_deterministic(tmp_path: Path) -> None:
     assert [span.model_dump() for span in first.spans] == [
         span.model_dump() for span in second.spans
     ]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        pytest.param(lambda tmp_path: tmp_path / "missing.docx", id="missing"),
+        pytest.param(
+            lambda tmp_path: _write_corrupt_docx(tmp_path / "corrupt.docx"),
+            id="corrupt",
+        ),
+    ],
+)
+def test_parser_normalizes_unreadable_docx_errors(tmp_path: Path, path) -> None:
+    docx_path = path(tmp_path)
+
+    with pytest.raises(ParseError, match="Unable to parse DOCX document") as error:
+        DocxParser().parse(docx_path)
+
+    assert error.value.__cause__ is not None
+    assert str(docx_path) not in str(error.value)
+
+
+def _write_corrupt_docx(path: Path) -> Path:
+    path.write_bytes(b"this is not a ZIP archive")
+    return path
 
 
 def test_parser_tracks_nested_heading_levels(tmp_path: Path) -> None:
