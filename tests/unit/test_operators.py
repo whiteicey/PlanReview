@@ -123,9 +123,10 @@ def test_all_equal_has_pass_fail_unknown_and_never_compares_different_scopes() -
     assert run("all_equal", [matching[0], fact("b", "开发井总数", 38, subject="单区")], params=params).status is RuleStatus.UNKNOWN
     assert run("all_equal", [matching[0], fact("b", "开发井总数", 38, condition="峰值")], params=params).status is RuleStatus.UNKNOWN
     assert run("all_equal", [fact("a", "开发井总数", 36, time_scope=None), matching[1]], params=params).status is RuleStatus.UNKNOWN
-    assert run("all_equal", matching, params={"parameter": "开发井总数", "match_dimensions": ["subject", "time_scope"]}).status is RuleStatus.PASS
-    assert run("all_equal", [matching[0], fact("b", "开发井总数", 36, condition="峰值")], params={"parameter": "开发井总数", "match_dimensions": ["subject", "time_scope"]}).status is RuleStatus.PASS
-    assert run("all_equal", matching, params={"parameter": "开发井总数", "match_dimensions": ["subject", "bogus"]}).status is RuleStatus.UNKNOWN
+    assert run("all_equal", matching, params={"parameter": "开发井总数", "match_dimensions": ["canonical_name", "subject", "time_scope", "statistical_scope", "condition"]}).status is RuleStatus.PASS
+    assert run("all_equal", [matching[0], fact("b", "开发井总数", 36, condition="峰值")], params={"parameter": "开发井总数", "match_dimensions": ["canonical_name", "subject", "time_scope", "statistical_scope", "condition"]}).status is RuleStatus.UNKNOWN
+    assert run("all_equal", matching, params={"parameter": "开发井总数", "match_dimensions": ["subject", "time_scope"]}).status is RuleStatus.UNKNOWN
+    assert run("all_equal", matching, params={"parameter": "开发井总数", "match_dimensions": ["canonical_name", {"bad": "nested"}, "time_scope", "statistical_scope", "condition"]}).status is RuleStatus.UNKNOWN
 
 
 def test_sum_equals_has_pass_fail_unknown_and_requires_one_shared_full_key() -> None:
@@ -172,7 +173,13 @@ def test_change_requires_reason_has_pass_fail_unknown_and_scope_matching() -> No
     assert outcome.evidence_span_ids == ["old", "new", "reason"]
     assert run("change_requires_reason", [old, fact("new", "建设周期", 30, time_scope="达产期", source_version="v3")], params=params).status is RuleStatus.UNKNOWN
     assert run("change_requires_reason", [old, fact("new", "建设周期", 30, source_version="v1")], params=params).status is RuleStatus.UNKNOWN
-    assert run("change_requires_reason", [old, fact("new", "建设周期", 30, source_version="v3")], [span("建设周期无原因，调整", sid="bad", section="审查意见回复表")], params).status is RuleStatus.FAIL
+    for phrase in ("无原因", "未说明原因", "未提供原因", "原因不明", "尚无原因"):
+        failed = run("change_requires_reason", [old, fact("new", "建设周期", 30, span_id="new", source_version="v3")], [span(f"建设周期{phrase}，调整", sid="bad", section="审查意见回复表")], params)
+        assert failed.status is RuleStatus.FAIL
+        assert failed.evidence_span_ids == ["old", "new", "bad"]
+    failed = run("change_requires_reason", [old, fact("new", "建设周期", 30, span_id="new", source_version="v3")], [span("建设周期尚未说明，调整", sid="scan", section="审查意见回复表")], params)
+    assert failed.status is RuleStatus.FAIL
+    assert failed.evidence_span_ids == ["old", "new", "scan"]
     assert run("change_requires_reason", [old, fact("new", "建设周期", 30, source_version="v3")], [span("建设周期调整原因：地面条件变化", sid="wrong", section="普通说明")], params).status is RuleStatus.FAIL
     assert run("change_requires_reason", [old], params=params).status is RuleStatus.UNKNOWN
 

@@ -72,3 +72,31 @@ Full follow-up output:
 python -m pytest -q
 93 passed, 1 warning in 1.22s
 ```
+
+## Re-review follow-up
+
+Status: all Important findings addressed.
+
+- Explicit `match_dimensions` now must contain exactly all five dimensions (`canonical_name`, `subject`, `time_scope`, `statistical_scope`, `condition`); partial lists, nested values, non-string values, duplicates, and unknown names safely return `UNKNOWN` without `TypeError`.
+- `change_requires_reason` rejects expanded absence phrases: `无原因`, `无理由`, `没有原因`, `未说明原因`, `未提供原因`, `原因不明`, and `尚无原因`.
+- Failed change-reason checks include all scanned spans in configured response sections, even when no qualifying reason is found.
+
+Changed files in this follow-up:
+
+```text
+app/rules/operators.py
+tests/unit/test_operators.py
+.superpowers/sdd/task-12-report.md
+```
+
+Exact verification output:
+
+```text
+python -m pytest tests/unit/test_operators.py -q
+11 passed, 1 warning in 0.14s
+
+python -m pytest -q
+93 passed, 1 warning in 1.21s
+```
+
+Concern remains the pre-existing `asyncio_mode` warning because `pytest-asyncio` is unavailable.

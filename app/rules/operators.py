@@ -104,23 +104,28 @@ _DEFAULT_SCOPE_DIMENSIONS = (
 
 
 def _matching_dimensions(
-    params: dict[str, Any], default: tuple[str, ...]
+    params: Any, default: tuple[str, ...]
 ) -> tuple[str, ...] | None:
     """Validate the explicit match_dimensions contract.
 
-    ``canonical_name`` (also accepted as ``name``) is a real comparison
-    dimension. Cross-parameter arithmetic defaults to the four scope
-    dimensions because its operands intentionally have different names;
-    callers may explicitly include the name dimension, which then makes such
-    a comparison UNKNOWN rather than silently ignoring it.
+    An explicit contract must name all five comparison-key dimensions.  A
+    partial list is rejected instead of silently dropping a scope dimension.
+    Cross-parameter arithmetic uses the internal four-scope default when no
+    contract is supplied because its selected operands intentionally have
+    different canonical names; an explicit five-dimension contract still
+    validates the name dimension without weakening the four scope checks.
     """
-    configured = params.get("match_dimensions", default)
-    if not isinstance(configured, (list, tuple)) or not configured:
+    if not isinstance(params, dict):
+        return None
+    if "match_dimensions" not in params:
+        return default
+    configured = params["match_dimensions"]
+    if not isinstance(configured, (list, tuple)) or len(configured) != len(MATCH_DIMENSIONS):
+        return None
+    if not all(isinstance(value, str) for value in configured):
         return None
     normalized = tuple(_DIMENSION_ALIASES.get(value, value) for value in configured)
-    if len(set(normalized)) != len(normalized) or any(
-        value not in MATCH_DIMENSIONS for value in normalized
-    ):
+    if set(normalized) != set(MATCH_DIMENSIONS):
         return None
     return normalized
 
@@ -157,7 +162,10 @@ def _single_matching_facts(
     if any(len(group) != 1 for group in groups):
         return None, gathered
     selected = [group[0] for group in groups]
-    return (selected if _same_dimensions(selected, dimensions) else None), gathered
+    comparison_dimensions = tuple(
+        dimension for dimension in dimensions if dimension != "canonical_name"
+    )
+    return (selected if _same_dimensions(selected, comparison_dimensions) else None), gathered
 
 
 def required_sections_exist(context: OperatorContext, params: dict[str, Any]) -> OperatorOutcome:
@@ -330,19 +338,32 @@ def change_requires_reason(context: OperatorContext, params: dict[str, Any]) -> 
         isinstance(section, str) and section for section in response_sections
     ):
         return _unknown("原因响应章节配置无效", facts)
-    relevant_spans = [
+    scanned_spans = [
         span
         for span in context.spans
         if any(section in path for section in response_sections for path in span.section_path)
-        and parameter in span.text
-        and not any(negative in span.text for negative in ("无原因", "无理由", "没有原因"))
+    ]
+    absence_phrases = (
+        "无原因",
+        "无理由",
+        "没有原因",
+        "未说明原因",
+        "未提供原因",
+        "原因不明",
+        "尚无原因",
+    )
+    relevant_spans = [
+        span
+        for span in scanned_spans
+        if parameter in span.text
+        and not any(negative in span.text for negative in absence_phrases)
         and any(term in span.text for term in terms)
     ]
     return _outcome(
         RuleStatus.PASS if relevant_spans else RuleStatus.FAIL,
         "变更有原因" if relevant_spans else "变更缺少原因",
         facts,
-        relevant_spans,
+        relevant_spans if relevant_spans else scanned_spans,
     )
 
 
