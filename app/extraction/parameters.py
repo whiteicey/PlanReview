@@ -13,8 +13,22 @@ _NUMBER = r"[-+]?\d[\d,]*(?:\.\d+)?"
 _BODY = re.compile(
     rf"(?P<name>[一-鿿A-Za-z0-9/（）()]+?)(?:为|：|:)\s*"
     rf"(?P<value>{_NUMBER})\s*"
-    rf"(?P<unit>万m³/d|万m3/d|m³/d|m3/d|万吨/年|个月|口|座|%)?"
+    # A complete supported unit is required. An optional unit would turn a
+    # date such as ``投产时间：2028年03月`` into a false 2028 fact.
+    rf"(?P<unit>万m³/d|万m3/d|m³/d|m3/d|万吨/年|个月|口|座|%)"
 )
+
+_HEADER_ALIASES = {
+    "name": {"参数名称", "名称"},
+    "value": {"数值"},
+    "unit": {"单位"},
+    "subject": {"对象"},
+    "time": {"时间"},
+    "stage": {"阶段"},
+    "time_stage": {"时间/阶段"},
+    "statistical": {"统计口径"},
+    "condition": {"条件"},
+}
 
 
 def _number(value: str) -> float | None:
@@ -24,17 +38,68 @@ def _number(value: str) -> float | None:
         return None
 
 
-def _header_columns(row: dict[int, SourceSpan]) -> dict[str, int]:
-    """Map normalized table headers to their columns without changing cell data."""
-    return {cell.text.strip(): column_index for column_index, cell in row.items()}
+def _normalized_header(text: str) -> str:
+    return re.sub(r"\s+", "", text.strip())
 
 
-def _cell_text(row: dict[int, SourceSpan], headers: dict[str, int], *labels: str) -> str | None:
+def _canonical_header(text: str) -> str | None:
+    normalized = _normalized_header(text)
+    for canonical, aliases in _HEADER_ALIASES.items():
+        if normalized in {_normalized_header(alias) for alias in aliases}:
+            return canonical
+    return None
+
+
+def _header_columns(
+    rows: dict[int, dict[int, SourceSpan]], header_end: int
+) -> dict[str, list[int]]:
+    """Flatten header rows, including DOCX-expanded merged cells.
+
+    A merged cell is repeated by python-docx in each covered column, so each
+    column receives all non-empty labels from the header block. Labels are
+    normalized only for matching; cell text and source spans remain untouched.
+    """
+    header_columns: dict[str, list[int]] = {}
+    for row_index in range(header_end + 1):
+        for column_index, cell in rows.get(row_index, {}).items():
+            canonical = _canonical_header(cell.text)
+            if canonical is None:
+                continue
+            header_columns.setdefault(canonical, [])
+            if column_index not in header_columns[canonical]:
+                header_columns[canonical].append(column_index)
+    return header_columns
+
+
+def _columns_for(headers: dict[str, list[int]], *labels: str) -> list[int]:
+    columns: list[int] = []
     for label in labels:
-        column_index = headers.get(label)
-        if column_index is not None and column_index in row:
+        for column_index in headers.get(label, []):
+            if column_index not in columns:
+                columns.append(column_index)
+    return columns
+
+
+def _cell_text(
+    row: dict[int, SourceSpan], headers: dict[str, list[int]], *labels: str
+) -> str | None:
+    for column_index in _columns_for(headers, *labels):
+        if column_index in row:
             return row[column_index].text.strip()
     return None
+
+
+def _combined_time_scope(
+    row: dict[int, SourceSpan], headers: dict[str, list[int]]
+) -> str | None:
+    combined: list[str] = []
+    for label, display_label in (("time", "时间"), ("stage", "阶段")):
+        value = _cell_text(row, headers, label)
+        if value is not None:
+            combined.append(f"{display_label}={value}")
+    if combined:
+        return ";".join(combined)
+    return _cell_text(row, headers, "time_stage")
 
 
 def _table_facts(parsed: ParsedDocument, source_version: str | None) -> list[ParameterFact]:
@@ -53,18 +118,25 @@ def _table_facts(parsed: ParsedDocument, source_version: str | None) -> list[Par
             (
                 row_index
                 for row_index, row in rows.items()
-                if "参数名称" in "".join(cell.text for cell in row.values())
+                if {"name", "value"}.issubset(
+                    {
+                        canonical
+                        for canonical in (_canonical_header(cell.text) for cell in row.values())
+                        if canonical is not None
+                    }
+                )
             ),
             None,
         )
         if header_row_index is None:
             continue
 
-        headers = _header_columns(rows[header_row_index])
-        name_column = headers.get("参数名称")
-        value_column = headers.get("数值")
-        if name_column is None or value_column is None:
+        headers = _header_columns(rows, header_row_index)
+        name_columns = _columns_for(headers, "name")
+        value_columns = _columns_for(headers, "value")
+        if not name_columns or not value_columns:
             continue
+        name_column, value_column = name_columns[0], value_columns[0]
 
         for row_index, row in rows.items():
             if row_index <= header_row_index:
@@ -86,11 +158,11 @@ def _table_facts(parsed: ParsedDocument, source_version: str | None) -> list[Par
                     raw_name=raw_name,
                     raw_value=raw_value,
                     normalized_value=_number(raw_value),
-                    raw_unit=_cell_text(row, headers, "单位"),
-                    subject=_cell_text(row, headers, "对象"),
-                    time_scope=_cell_text(row, headers, "时间/阶段", "时间", "阶段"),
-                    statistical_scope=_cell_text(row, headers, "统计口径"),
-                    condition=_cell_text(row, headers, "条件"),
+                    raw_unit=_cell_text(row, headers, "unit"),
+                    subject=_cell_text(row, headers, "subject"),
+                    time_scope=_combined_time_scope(row, headers),
+                    statistical_scope=_cell_text(row, headers, "statistical"),
+                    condition=_cell_text(row, headers, "condition"),
                     source_document=parsed.document_id,
                     source_version=source_version,
                     source_span_id=value_cell.span_id,

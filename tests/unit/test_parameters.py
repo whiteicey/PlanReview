@@ -107,3 +107,42 @@ def test_does_not_fill_missing_dimensions(tmp_path: Path) -> None:
     assert fact.time_scope is None
     assert fact.statistical_scope is None
     assert fact.condition is None
+
+
+def test_flattens_multi_row_merged_headers_and_preserves_separate_time_stage(
+    tmp_path: Path,
+) -> None:
+    from app.extraction.parameters import extract_parameter_facts
+
+    path = tmp_path / "merged-headers.docx"
+    doc = Document()
+    table = doc.add_table(rows=3, cols=4)
+    table.cell(0, 0).merge(table.cell(0, 1)).text = "参数"
+    table.cell(0, 2).merge(table.cell(0, 3)).text = "时间维度"
+    for index, header in enumerate(["名称", "数值", "时间", "阶段"]):
+        table.cell(1, index).text = header
+    for index, value in enumerate(["高峰产量", "220", "2028年", "达产期"]):
+        table.cell(2, index).text = value
+    doc.save(path)
+
+    facts = extract_parameter_facts(DocxParser().parse(path, "D4"))
+
+    [fact] = [fact for fact in facts if fact.raw_name == "高峰产量"]
+    assert (fact.raw_value, fact.normalized_value) == ("220", 220.0)
+    assert fact.time_scope == "时间=2028年;阶段=达产期"
+    assert fact.source_span_id == "D4:t:0:2:1"
+
+
+def test_does_not_extract_partial_date_like_body_value(tmp_path: Path) -> None:
+    from app.extraction.parameters import extract_parameter_facts
+
+    path = tmp_path / "date-like-body.docx"
+    doc = Document()
+    doc.add_paragraph("投产时间：2028年03月，建设周期为30个月。")
+    doc.save(path)
+
+    facts = extract_parameter_facts(DocxParser().parse(path, "D5"))
+
+    assert not any(fact.raw_name == "投产时间" for fact in facts)
+    cycle = next(fact for fact in facts if fact.raw_name == "建设周期")
+    assert (cycle.raw_value, cycle.raw_unit) == ("30", "个月")
