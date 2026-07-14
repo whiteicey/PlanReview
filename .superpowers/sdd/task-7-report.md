@@ -7,7 +7,7 @@ Completed with TDD. Added section extraction and whitelist-only span selectors. 
 ## Commits
 
 - `f049aa953d0f2ea301b31b4bca1a201006649f9f` — `feat: add safe section extraction and selectors`
-- Report commit: pending
+- Report commit (initial): `d5f9f0e360b29275e2896c337e014fb506e84039`
 
 ## Tests and exact output
 
