@@ -9,12 +9,14 @@ from app.pipeline import StageRunner
 @pytest.mark.parametrize(
     "failed_stage",
     [
-        PipelineStage.PARSING,
-        PipelineStage.CALLING_MODEL,
-        PipelineStage.RUNNING_RULES,
+        PipelineStage.PARSED,
+        PipelineStage.LLM_REVIEWED,
+        PipelineStage.RULE_CHECKED,
     ],
 )
-def test_stage_failure_records_failure_and_stops_later_stages(failed_stage: PipelineStage) -> None:
+def test_stage_failure_records_failure_and_stops_later_stages(
+    failed_stage: PipelineStage,
+) -> None:
     called: list[PipelineStage] = []
 
     def stage_callback(stage: PipelineStage):
@@ -30,21 +32,28 @@ def test_stage_failure_records_failure_and_stops_later_stages(failed_stage: Pipe
         return callback
 
     stages = [
-        (PipelineStage.PARSING, stage_callback(PipelineStage.PARSING)),
-        (PipelineStage.CALLING_MODEL, stage_callback(PipelineStage.CALLING_MODEL)),
-        (PipelineStage.RUNNING_RULES, stage_callback(PipelineStage.RUNNING_RULES)),
-        (PipelineStage.COMPLETED, stage_callback(PipelineStage.COMPLETED)),
+        (PipelineStage.PARSED, stage_callback(PipelineStage.PARSED)),
+        (PipelineStage.LLM_REVIEWED, stage_callback(PipelineStage.LLM_REVIEWED)),
+        (PipelineStage.RULE_CHECKED, stage_callback(PipelineStage.RULE_CHECKED)),
+        (
+            PipelineStage.READY_FOR_HUMAN_REVIEW,
+            stage_callback(PipelineStage.READY_FOR_HUMAN_REVIEW),
+        ),
     ]
     result = StageRunner().run(stages)
 
     assert called == [
-        PipelineStage.PARSING,
-        PipelineStage.CALLING_MODEL,
-        PipelineStage.RUNNING_RULES,
-    ][: (1 if failed_stage is PipelineStage.PARSING else 2 if failed_stage is PipelineStage.CALLING_MODEL else 3)]
+        PipelineStage.PARSED,
+        PipelineStage.LLM_REVIEWED,
+        PipelineStage.RULE_CHECKED,
+    ][: (
+        1
+        if failed_stage is PipelineStage.PARSED
+        else 2 if failed_stage is PipelineStage.LLM_REVIEWED else 3
+    )]
     assert called[-1] is failed_stage
     assert result.final_status == "FAILED"
-    assert [record.stage for record in result.stage_records][-1] is PipelineStage.FAILED
+    assert result.stage_records[-1].stage is PipelineStage.FAILED
     failed_record = result.stage_records[-2]
     assert failed_record.stage is failed_stage
     assert failed_record.status == "failed"
@@ -62,8 +71,8 @@ def test_successful_stage_runner_reaches_human_review_without_failure_record() -
     called: list[str] = []
     result = StageRunner().run(
         [
-            (PipelineStage.PARSING, lambda: called.append("parser")),
-            (PipelineStage.RUNNING_RULES, lambda: called.append("rules")),
+            (PipelineStage.PARSED, lambda: called.append("parser")),
+            (PipelineStage.RULE_CHECKED, lambda: called.append("rules")),
         ]
     )
 

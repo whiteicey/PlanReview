@@ -103,7 +103,7 @@ def test_rule_definition_carries_operator_params():
 def test_stage_record_preserves_stage_timing_status_and_safe_error():
     started = datetime(2026, 7, 14, 12, tzinfo=timezone.utc)
     record = StageRecord(
-        stage=PipelineStage.RUNNING_RULES,
+        stage=PipelineStage.RULE_CHECKED,
         started_at=started,
         ended_at=started,
         status="completed",
@@ -111,7 +111,7 @@ def test_stage_record_preserves_stage_timing_status_and_safe_error():
         error="sanitized failure message",
     )
 
-    assert record.stage is PipelineStage.RUNNING_RULES
+    assert record.stage is PipelineStage.RULE_CHECKED
     assert record.started_at == started
     assert record.ended_at == started
     assert record.status == "completed"

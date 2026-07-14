@@ -16,22 +16,16 @@ def test_on_missing_values():
     assert OnMissing("block") is OnMissing.BLOCK
 
 
-def test_pipeline_stage_covers_all_required_states():
+def test_pipeline_stage_covers_the_review_lifecycle():
     assert {stage.name for stage in PipelineStage} == {
-        "CREATED",
-        "VALIDATING_FILES",
-        "PAIRING_FILES",
-        "PARSING",
-        "BUILDING_SPANS",
-        "EXTRACTING_PARAMETERS",
-        "NORMALIZING_FACTS",
-        "RUNNING_RULES",
-        "RETRIEVING_KNOWLEDGE",
-        "CALLING_MODEL",
-        "VALIDATING_MODEL_OUTPUT",
-        "MERGING_FINDINGS",
-        "WAITING_HUMAN_REVIEW",
-        "COMPLETED",
+        "UPLOADED",
+        "PARSED",
+        "EXTRACTED",
+        "NORMALIZED",
+        "RULE_CHECKED",
+        "LLM_REVIEWED",
+        "RECONCILED",
+        "READY_FOR_HUMAN_REVIEW",
         "FAILED",
     }
 
