@@ -51,3 +51,25 @@ cd review && python -m pytest -v
 ```
 
 Warning remains the existing `PytestConfigWarning: Unknown config option: asyncio_mode`.
+
+## Final review follow-up
+
+Added strict type constraints for safe option metadata: finite numbers only for numeric options, integers only for `max_tokens`/`timeout`/`seed`, and booleans only for `stream`; invalid values are redacted. Evidence IDs emitted to logs must match the bounded opaque ID pattern `[A-Za-z0-9][A-Za-z0-9_.-]{0,127}`; invalid IDs are replaced with `[REDACTED]`.
+
+Changed files:
+
+- `app/llm/provider.py`
+- `tests/unit/test_llm_provider.py`
+- `.superpowers/sdd/task-15-report.md`
+
+Final verification output:
+
+```text
+cd review && python -m pytest tests/unit/test_llm_provider.py -v
+10 passed, 1 warning in 0.04s
+
+cd review && python -m pytest -v
+138 passed, 1 warning in 1.31s
+```
+
+Concern remains the existing pytest configuration warning only.

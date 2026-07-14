@@ -9,21 +9,20 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+import math
+import re
 from typing import Any, Protocol
 
 _REDACTED = "[REDACTED]"
-_SAFE_SCALAR_OPTION_KEYS = frozenset(
-    {
-        "temperature",
-        "max_tokens",
-        "top_p",
-        "timeout",
-        "stream",
-        "seed",
-        "presence_penalty",
-        "frequency_penalty",
-    }
+_SAFE_FLOAT_OPTION_KEYS = frozenset(
+    {"temperature", "top_p", "presence_penalty", "frequency_penalty"}
 )
+_SAFE_INT_OPTION_KEYS = frozenset({"max_tokens", "timeout", "seed"})
+_SAFE_BOOL_OPTION_KEYS = frozenset({"stream"})
+_SAFE_SCALAR_OPTION_KEYS = (
+    _SAFE_FLOAT_OPTION_KEYS | _SAFE_INT_OPTION_KEYS | _SAFE_BOOL_OPTION_KEYS
+)
+_SAFE_EVIDENCE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _SENSITIVE_KEY_NAMES = frozenset(
     {
         "api_key",
@@ -136,11 +135,21 @@ def _redact_option_value(key: str, value: Any) -> Any:
         marker in normalized_key for marker in _BODY_BEARING_KEYS
     ):
         return _REDACTED
-    if normalized_key not in _SAFE_SCALAR_OPTION_KEYS:
-        return _REDACTED
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
+    if normalized_key in _SAFE_FLOAT_OPTION_KEYS:
+        return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else _REDACTED
+    if normalized_key in _SAFE_INT_OPTION_KEYS:
+        return value if isinstance(value, int) and not isinstance(value, bool) else _REDACTED
+    if normalized_key in _SAFE_BOOL_OPTION_KEYS:
+        return value if isinstance(value, bool) else _REDACTED
     return _REDACTED
+
+
+def _safe_evidence_span_ids(span_ids: Iterable[Any]) -> list[str]:
+    """Keep only opaque, bounded IDs; never emit arbitrary caller strings."""
+    return [
+        value if isinstance(value, str) and _SAFE_EVIDENCE_ID_PATTERN.fullmatch(value) else _REDACTED
+        for value in span_ids
+    ]
 
 
 def redact_request_for_log(
@@ -156,7 +165,7 @@ def redact_request_for_log(
         "model": request.model,
         "system_prompt": _REDACTED,
         "user_content": _REDACTED,
-        "evidence_span_ids": list(request.evidence_span_ids),
+        "evidence_span_ids": _safe_evidence_span_ids(request.evidence_span_ids),
     }
     for key, value in (provider_options or {}).items():
         redacted[key] = _redact_option_value(key, value)

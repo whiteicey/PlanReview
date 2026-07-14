@@ -155,6 +155,36 @@ def test_request_logging_does_not_copy_unknown_option_strings_or_nested_values()
     assert "document text hidden by default" not in repr(redacted)
 
 
+def test_request_logging_type_constrains_allowlisted_options_and_evidence_ids() -> None:
+    redacted = redact_request_for_log(
+        LLMRequest(
+            model="mock",
+            system_prompt="system",
+            user_content="FULL DOCUMENT BODY",
+            evidence_span_ids=["safe-span_01", "FULL DOCUMENT SECRET"],
+        ),
+        {
+            "temperature": "FULL DOCUMENT PAYLOAD",
+            "timeout": "Bearer token",
+            "stream": "true",
+            "max_tokens": True,
+            "seed": 42,
+            "top_p": 0.5,
+        },
+    )
+
+    assert redacted["temperature"] == "[REDACTED]"
+    assert redacted["timeout"] == "[REDACTED]"
+    assert redacted["stream"] == "[REDACTED]"
+    assert redacted["max_tokens"] == "[REDACTED]"
+    assert redacted["seed"] == 42
+    assert redacted["top_p"] == 0.5
+    assert redacted["evidence_span_ids"] == ["safe-span_01", "[REDACTED]"]
+    rendered = repr(redacted)
+    assert "FULL DOCUMENT" not in rendered
+    assert "Bearer token" not in rendered
+
+
 @pytest.mark.parametrize("provider", [AnthropicProvider(), OpenAIProvider()])
 def test_real_adapters_are_explicitly_deferred_before_any_request_handling(
     provider: AnthropicProvider | OpenAIProvider,
