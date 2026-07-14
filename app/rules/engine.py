@@ -29,6 +29,7 @@ class RuleEngine:
             results.append(
                 RuleResult(
                     rule_id=rule.rule_id,
+                    rule_version=rule.version,
                     status=outcome.status,
                     severity=rule.severity,
                     category=rule.category,

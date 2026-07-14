@@ -26,6 +26,8 @@ class ReviewRun:
     findings: list[Finding] = field(default_factory=list)
     stage_records: list[StageRecord] = field(default_factory=list)
     final_status: str = "PENDING"
+    # Retain only evidence hashes for anonymous exports; source span text is not kept.
+    evidence_text_hashes: dict[str, str] = field(default_factory=dict)
 
 
 class ReviewPipeline:
@@ -54,6 +56,9 @@ class ReviewPipeline:
 
         def parsed() -> None:
             spans.extend(span for document in documents for span in document.spans)
+            state.evidence_text_hashes = {
+                span.span_id: span.text_hash for span in spans
+            }
 
         def extracted() -> None:
             for document in documents:

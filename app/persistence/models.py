@@ -65,6 +65,7 @@ class ReviewRunORM(Base):
     final_status: Mapped[str] = mapped_column(String(64), nullable=False)
     facts: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
     stage_records: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
+    evidence_text_hashes: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -87,6 +88,7 @@ class RuleResultORM(Base):
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     rule_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    rule_version: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     severity: Mapped[str] = mapped_column(String(32), nullable=False)
     category: Mapped[str] = mapped_column(String(255), nullable=False)

@@ -146,6 +146,7 @@ class ReviewRepository:
                     final_status=run.final_status,
                     facts=_sanitize_facts(run.facts),
                     stage_records=_sanitize_json(_models_to_dict(run.stage_records)),
+                    evidence_text_hashes=_sanitize_evidence_text_hashes(run.evidence_text_hashes),
                 )
                 self.session.add(record)
                 self.session.flush()
@@ -153,6 +154,7 @@ class ReviewRepository:
                 record.final_status = run.final_status
                 record.facts = _sanitize_facts(run.facts)
                 record.stage_records = _sanitize_json(_models_to_dict(run.stage_records))
+                record.evidence_text_hashes = _sanitize_evidence_text_hashes(run.evidence_text_hashes)
                 # Delete children explicitly and flush before inserting replacements.
                 self.session.query(RuleResultORM).filter(
                     RuleResultORM.review_run_id == record.id
@@ -229,6 +231,7 @@ class ReviewRepository:
             findings=[_to_finding(item) for item in sorted(record.findings, key=lambda row: row.position)],
             stage_records=[StageRecord.model_validate(item) for item in record.stage_records],
             final_status=record.final_status,
+            evidence_text_hashes=dict(record.evidence_text_hashes),
         )
 
     def update_finding_review(
@@ -359,6 +362,7 @@ class ReviewRepository:
 def _validate_run_payload(run: ReviewRun) -> None:
     _sanitize_facts(run.facts)
     _sanitize_json(_models_to_dict(run.stage_records))
+    _sanitize_evidence_text_hashes(run.evidence_text_hashes)
     for result in run.rule_results:
         _rule_result_row(result, 0, 0)
     for finding in run.findings:
@@ -370,6 +374,7 @@ def _rule_result_row(result: RuleResult, position: int, review_run_id: int) -> R
         review_run_id=review_run_id,
         position=position,
         rule_id=_safe_identifier(result.rule_id, "rule_id"),
+        rule_version=_safe_identifier(result.rule_version, "rule_version", optional=True),
         status=result.status.value,
         severity=result.severity.value,
         category=_safe_identifier(result.category, "rule category"),
@@ -410,6 +415,7 @@ def _fact_from_row(row: dict[str, Any]) -> ParameterFact:
 def _to_rule_result(row: RuleResultORM) -> RuleResult:
     return RuleResult(
         rule_id=row.rule_id,
+        rule_version=row.rule_version,
         status=RuleStatus(row.status),
         severity=Severity(row.severity),
         category=row.category,
@@ -439,6 +445,18 @@ def _to_finding(row: FindingORM) -> Finding:
         human_note=row.human_note,
         original_ai_snapshot=dict(row.ai_snapshot),
     )
+
+
+def _sanitize_evidence_text_hashes(values: dict[str, str]) -> dict[str, str]:
+    if not isinstance(values, dict) or len(values) > 10_000:
+        raise ValueError("evidence text hashes must be a bounded mapping")
+    output: dict[str, str] = {}
+    for span_id, text_hash in values.items():
+        safe_span_id = _safe_identifier(span_id, "evidence span id")
+        if not isinstance(text_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", text_hash):
+            raise ValueError("evidence text hash must be a SHA-256 digest")
+        output[safe_span_id] = text_hash
+    return output
 
 
 def _sanitize_facts(values: list[ParameterFact]) -> list[dict[str, Any]]:

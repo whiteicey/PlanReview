@@ -93,6 +93,7 @@ class StageRecord(BaseModel):
 
 class RuleResult(BaseModel):
     rule_id: str
+    rule_version: str | None = None
     status: RuleStatus
     severity: Severity
     category: str
