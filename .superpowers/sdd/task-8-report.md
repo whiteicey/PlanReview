@@ -32,6 +32,41 @@ python -m pytest -q
 39 passed, 1 warning in 0.69s
 ```
 
+## Review fixes
+
+- Added regression coverage and support for multi-row/merged table headers by flattening header labels across rows and columns.
+- When separate `时间` and `阶段` columns are present, `time_scope` is deterministically represented as `时间=<value>;阶段=<value>`; a combined `时间/阶段` column remains supported.
+- Body extraction now requires a complete supported unit, preventing partial date-like facts such as `投产时间：2028年03月`.
+
+## Changed files
+
+- `app/extraction/parameters.py`
+- `tests/unit/test_parameters.py`
+- `.superpowers/sdd/task-8-report.md`
+
+## Fix verification exact output
+
+Focused regression run:
+
+```text
+python -m pytest tests/unit/test_parameters.py -v
+6 passed, 1 warning in 0.43s
+```
+
+Final rerun after report/code cleanup produced the same output:
+
+```text
+python -m pytest tests/unit/test_parameters.py -v
+6 passed, 1 warning in 0.43s
+```
+
+Full-suite verification:
+
+```text
+python -m pytest -q
+41 passed, 1 warning in 0.79s
+```
+
 ## Concerns
 
 Pytest continues to emit the existing configuration warning `Unknown config option: asyncio_mode`; this task did not change that configuration. Prose unit recognition is deliberately limited to explicit supported unit forms, so unsupported prose units are left unset rather than guessed. Table units are preserved verbatim.
