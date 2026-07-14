@@ -12,8 +12,44 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 _REDACTED = "[REDACTED]"
-_SENSITIVE_KEY_MARKERS = frozenset(
-    {"api_key", "apikey", "authorization", "credential", "password", "secret", "token"}
+_SAFE_SCALAR_OPTION_KEYS = frozenset(
+    {
+        "temperature",
+        "max_tokens",
+        "top_p",
+        "timeout",
+        "stream",
+        "seed",
+        "presence_penalty",
+        "frequency_penalty",
+    }
+)
+_SENSITIVE_KEY_NAMES = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "authorization",
+        "credential",
+        "password",
+        "secret",
+        "token",
+    }
+)
+_SENSITIVE_KEY_SUFFIXES = ("_key", "_secret", "_token")
+_BODY_BEARING_KEYS = frozenset(
+    {
+        "body",
+        "content",
+        "document",
+        "documents",
+        "input",
+        "inputs",
+        "message",
+        "messages",
+        "payload",
+        "prompt",
+        "prompts",
+    }
 )
 _REQUIRED_FINDING_FIELDS = frozenset(
     {"category", "severity", "title", "description", "suggestion", "evidence_span_ids"}
@@ -82,13 +118,39 @@ def validate_findings(
     return validated
 
 
+def _redact_option_value(key: str, value: Any) -> Any:
+    """Keep only explicitly safe scalar provider metadata for logging.
+
+    Unknown values are redacted by default.  This is intentionally stricter
+    than recursively copying arbitrary mappings: provider payload schemas can
+    change, and document content must never cross the logging boundary.
+    """
+    normalized_key = key.casefold().replace("-", "_")
+    if (
+        normalized_key in _SENSITIVE_KEY_NAMES
+        or normalized_key.endswith(_SENSITIVE_KEY_SUFFIXES)
+        or normalized_key == "private_key"
+    ):
+        return _REDACTED
+    if normalized_key in _BODY_BEARING_KEYS or any(
+        marker in normalized_key for marker in _BODY_BEARING_KEYS
+    ):
+        return _REDACTED
+    if normalized_key not in _SAFE_SCALAR_OPTION_KEYS:
+        return _REDACTED
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return _REDACTED
+
+
 def redact_request_for_log(
     request: LLMRequest, provider_options: Mapping[str, Any] | None = None
 ) -> dict[str, Any]:
     """Return non-sensitive request metadata suitable for application logs.
 
-    Prompts and document body are always redacted.  Option keys containing
-    credentials, keys, or tokens are also redacted before any logging boundary.
+    Prompts and document bodies are always redacted. Provider options use a
+    strict allowlist of safe scalar tuning metadata; nested headers,
+    credentials, payloads, messages, and unknown values are never copied.
     """
     redacted: dict[str, Any] = {
         "model": request.model,
@@ -97,12 +159,7 @@ def redact_request_for_log(
         "evidence_span_ids": list(request.evidence_span_ids),
     }
     for key, value in (provider_options or {}).items():
-        normalized_key = key.casefold().replace("-", "_")
-        redacted[key] = (
-            _REDACTED
-            if any(marker in normalized_key for marker in _SENSITIVE_KEY_MARKERS)
-            else value
-        )
+        redacted[key] = _redact_option_value(key, value)
     return redacted
 
 

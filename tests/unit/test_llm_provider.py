@@ -104,6 +104,57 @@ def test_request_logging_redacts_body_and_sensitive_keys() -> None:
     assert "sk-secret" not in repr(redacted)
 
 
+def test_request_logging_redacts_nested_credentials_and_all_body_bearing_options() -> None:
+    secrets_and_document = {
+        "private_key": "PRIVATE KEY MATERIAL",
+        "headers": {
+            "Authorization": "Bearer nested-secret",
+            "X-Api-Key": "nested-api-secret",
+            "X-Trace-Id": "trace-safe-but-not-an-allowlisted-value",
+        },
+        "payload": {"document": "FULL DOCUMENT PAYLOAD"},
+        "messages": [{"role": "user", "content": "FULL DOCUMENT MESSAGE"}],
+        "body": "FULL REQUEST BODY",
+        "temperature": 0,
+        "max_tokens": 128,
+    }
+
+    redacted = redact_request_for_log(request("FULL DOCUMENT BODY"), secrets_and_document)
+
+    assert redacted["private_key"] == "[REDACTED]"
+    assert redacted["headers"] == "[REDACTED]"
+    assert redacted["payload"] == "[REDACTED]"
+    assert redacted["messages"] == "[REDACTED]"
+    assert redacted["body"] == "[REDACTED]"
+    assert redacted["temperature"] == 0
+    assert redacted["max_tokens"] == 128
+    rendered = repr(redacted)
+    for confidential_value in (
+        "FULL DOCUMENT BODY",
+        "PRIVATE KEY MATERIAL",
+        "Bearer nested-secret",
+        "nested-api-secret",
+        "FULL DOCUMENT PAYLOAD",
+        "FULL DOCUMENT MESSAGE",
+        "FULL REQUEST BODY",
+    ):
+        assert confidential_value not in rendered
+
+
+def test_request_logging_does_not_copy_unknown_option_strings_or_nested_values() -> None:
+    redacted = redact_request_for_log(
+        request(),
+        {
+            "custom_option": "document text hidden by default",
+            "nested": {"arbitrary": "nested document text hidden by default"},
+        },
+    )
+
+    assert redacted["custom_option"] == "[REDACTED]"
+    assert redacted["nested"] == "[REDACTED]"
+    assert "document text hidden by default" not in repr(redacted)
+
+
 @pytest.mark.parametrize("provider", [AnthropicProvider(), OpenAIProvider()])
 def test_real_adapters_are_explicitly_deferred_before_any_request_handling(
     provider: AnthropicProvider | OpenAIProvider,
