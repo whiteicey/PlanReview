@@ -34,7 +34,9 @@ from app.persistence.models import (
 from app.review.pipeline import ReviewRun
 from app.storage.case_files import StoredFile
 
-_SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+# Evidence span identifiers use colon-separated parser coordinates (for example,
+# ``document:p:0``); they remain metadata identifiers and never file paths.
+_SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 
 _SECRET_OR_BODY_MARKERS = (
     "api_key",
@@ -180,6 +182,31 @@ class ReviewRepository:
             raise
         self.session.refresh(record)
         return run.case_id
+
+    def get_case(self, case_id: str) -> CaseRecord | None:
+        """Hydrate active case metadata without exposing a recycled case."""
+        _safe_identifier(case_id, "case_id")
+        record = self.session.scalar(
+            select(CaseORM)
+            .outerjoin(RecycleBinORM, RecycleBinORM.case_id == CaseORM.case_id)
+            .where(CaseORM.case_id == case_id, RecycleBinORM.case_id.is_(None))
+            .options(selectinload(CaseORM.files))
+        )
+        if record is None:
+            return None
+        return CaseRecord(
+            case_id=record.case_id,
+            files=[
+                StoredFile(
+                    storage_relative_path=item.storage_relative_path,
+                    sha256=item.sha256,
+                    size=item.size,
+                    safe_name=item.safe_name,
+                )
+                for item in record.files
+            ],
+            statistics=dict(record.statistics),
+        )
 
     def get_run(self, run_id: str) -> ReviewRun | None:
         """Hydrate an active review run directly from the database."""

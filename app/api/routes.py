@@ -1,0 +1,215 @@
+"""Loopback-only local API backed by the durable review repository."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from uuid import UUID, uuid4
+
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
+
+from app.api.schemas import (
+    CaseCreated,
+    DeleteCaseRequest,
+    ExportFormat,
+    FindingResponse,
+    FindingReviewUpdate,
+    ReviewSummary,
+)
+from app.domain.exceptions import ParseError, PathTraversalError, UnsupportedFileTypeError
+from app.llm.mock import MockProvider
+from app.parsers.docx_parser import DocxParser
+from app.persistence.db import create_session
+from app.persistence.models import CaseRecord
+from app.persistence.repository import ReviewRepository
+from app.reports.exporters import export_anonymous_package, export_excel, export_word
+from app.review.pipeline import ReviewPipeline
+from app.settings import get_settings
+from app.storage.case_files import StoredFile, store_upload
+from app.storage.paths import safe_join, validate_upload_name
+
+router = APIRouter(prefix="/api", tags=["local review"])
+
+
+def _case_id(value: str) -> str:
+    try:
+        parsed = UUID(value)
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "case_id 必须是 UUID4") from exc
+    if parsed.version != 4 or str(parsed) != value.lower():
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "case_id 必须是 UUID4")
+    return str(parsed)
+
+
+def _repository() -> ReviewRepository:
+    return ReviewRepository(create_session(get_settings().db_path))
+
+
+def _uploaded_file(case_id: str, file: StoredFile) -> Path:
+    try:
+        return safe_join(get_settings().storage_root, *file.storage_relative_path.split("/"))
+    except PathTraversalError as exc:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "stored file path is invalid") from exc
+
+
+def _active_run(case_id: str):
+    run = _repository().get_run(case_id)
+    if run is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "案例或审查结果不存在")
+    return run
+
+
+def _finding_response(item) -> FindingResponse:
+    return FindingResponse(
+        finding_id=item.finding_id,
+        origin=item.origin.value,
+        category=item.category,
+        severity=item.severity.value,
+        parameter=item.parameter,
+        title=item.title,
+        description=item.description,
+        suggestion=item.suggestion,
+        rule_id=item.rule_id,
+        evidence_span_ids=item.evidence_span_ids,
+        needs_human_review=item.needs_human_review,
+        review_status=item.review_status,
+        human_note=item.human_note,
+    )
+
+
+@router.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok", "disclaimer": get_settings().disclaimer}
+
+
+@router.get("/config")
+def config() -> dict[str, object]:
+    settings = get_settings()
+    return {
+        "allowed_extensions": sorted(settings.allowed_extensions),
+        "max_file_bytes": settings.max_file_bytes,
+        "max_pages": settings.max_pages,
+        "disclaimer": settings.disclaimer,
+    }
+
+
+@router.post("/cases", status_code=status.HTTP_201_CREATED, response_model=CaseCreated)
+async def create_case(file: UploadFile = File(...)) -> CaseCreated:
+    settings = get_settings()
+    try:
+        filename = validate_upload_name(file.filename or "", settings.allowed_extensions)
+    except UnsupportedFileTypeError as exc:
+        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, str(exc)) from exc
+
+    data = await file.read()
+    if len(data) > settings.max_file_bytes:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "文件超过100MB限制")
+
+    case_id = str(uuid4())
+    try:
+        stored = store_upload(settings.storage_root, case_id, filename, data)
+        _repository().save_case(CaseRecord(case_id=case_id, files=[stored], statistics={"document_count": 1}))
+    except (OSError, ValueError, PathTraversalError) as exc:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "无法保存案例文件") from exc
+    finally:
+        await file.close()
+
+    return CaseCreated(
+        case_id=case_id,
+        file_name=stored.safe_name,
+        size=stored.size,
+        sha256=stored.sha256,
+        storage_relative_path=stored.storage_relative_path,
+    )
+
+
+@router.post("/cases/{case_id}/review", status_code=status.HTTP_201_CREATED, response_model=ReviewSummary)
+def review_case(case_id: str) -> ReviewSummary:
+    case_id = _case_id(case_id)
+    repository = _repository()
+    # Read durable case metadata rather than an in-process upload cache.
+    case = repository.get_case(case_id)
+    if case is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "案例不存在")
+    if not case.files:
+        raise HTTPException(status.HTTP_409_CONFLICT, "案例没有可审查的 DOCX")
+    try:
+        documents = [
+            DocxParser().parse(_uploaded_file(case_id, item), document_id=f"{case_id}-{index}")
+            for index, item in enumerate(case.files)
+        ]
+    except (ParseError, OSError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "DOCX 解析失败，仅处理文本型 DOCX") from exc
+
+    run = ReviewPipeline().run(case_id, documents, [], MockProvider())
+    try:
+        repository.save_run(run)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "审查结果无法持久化") from exc
+    return ReviewSummary(
+        case_id=run.case_id,
+        final_status=run.final_status,
+        finding_count=len(run.findings),
+        fact_count=len(run.facts),
+        stages=[record.stage.value for record in run.stage_records],
+    )
+
+
+@router.get("/cases/{case_id}/findings", response_model=list[FindingResponse])
+def list_findings(case_id: str) -> list[FindingResponse]:
+    run = _active_run(_case_id(case_id))
+    return [_finding_response(item) for item in run.findings]
+
+
+@router.patch("/findings/{finding_id}", response_model=FindingResponse)
+def update_finding(finding_id: str, update: FindingReviewUpdate) -> FindingResponse:
+    case_id = _case_id(update.case_id)
+    repository = _repository()
+    try:
+        repository.update_finding_review(case_id, finding_id, update.review_status, update.human_note)
+    except KeyError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "案例范围内未找到该问题") from exc
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+
+    run = _active_run(case_id)
+    finding = next((item for item in run.findings if item.finding_id == finding_id), None)
+    if finding is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "案例范围内未找到该问题")
+    return _finding_response(finding)
+
+
+@router.get("/cases/{case_id}/exports/{format_name}")
+def export_case(case_id: str, format_name: ExportFormat):
+    case_id = _case_id(case_id)
+    run = _active_run(case_id)
+    reports_dir = safe_join(get_settings().storage_root, "reports", case_id)
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    if format_name == "xlsx":
+        path = export_excel(run, reports_dir / f"{case_id}.xlsx")
+        return FileResponse(path, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename="review-findings.xlsx")
+    if format_name == "docx":
+        path = export_word(run, reports_dir / f"{case_id}.docx")
+        return FileResponse(path, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", filename="review-findings.docx")
+    path = export_anonymous_package(run, reports_dir / f"{case_id}-anonymous.zip")
+    return FileResponse(path, media_type="application/zip", filename="review-anonymous.zip")
+
+
+@router.post("/cases/{case_id}/delete-confirm")
+def move_case_to_recycle_bin(case_id: str) -> dict[str, str]:
+    case_id = _case_id(case_id)
+    try:
+        _repository().delete_case_to_recycle_bin(case_id)
+    except KeyError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "案例不存在") from exc
+    return {"case_id": case_id, "status": "recycled", "confirmation_required": f"DELETE {case_id}"}
+
+
+@router.delete("/cases/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
+def permanently_delete_case(case_id: str, request: DeleteCaseRequest) -> None:
+    case_id = _case_id(case_id)
+    try:
+        _repository().permanently_delete_case(case_id, request.confirmation)
+    except ValueError as exc:
+        code = status.HTTP_409_CONFLICT if "recycle bin" in str(exc) else status.HTTP_422_UNPROCESSABLE_ENTITY
+        raise HTTPException(code, str(exc)) from exc

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>开发方案审查助手</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">LOCAL REVIEW WORKBENCH</p>
+    <h1>开发方案审查助手</h1>
+    <p class="lede">用可追溯的证据链完成文本型 DOCX 形式初审。</p>
+    <div class="notice">AI 初审结果，不是正式审查结论</div>
+    <form id="upload">
+      <label class="file-picker" for="file">选择 DOCX<input id="file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></label>
+      <button type="submit">上传并开始</button>
+    </form>
+    <section id="result" aria-live="polite"></section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
