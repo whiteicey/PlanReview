@@ -1,8 +1,11 @@
+from datetime import datetime, timezone
+
 from app.domain.enums import (
     BlockType,
     ExtractionMethod,
     OnMissing,
     Origin,
+    PipelineStage,
     RuleStatus,
     Severity,
 )
@@ -11,6 +14,7 @@ from app.domain.schemas import (
     ParameterFact,
     RuleDefinition,
     RuleResult,
+    StageRecord,
     SourceSpan,
 )
 
@@ -94,6 +98,23 @@ def test_rule_definition_carries_operator_params():
     assert definition.params["parameter"] == "capacity"
     assert definition.enabled is True
     assert definition.source_type == "DEMO_ONLY"
+
+
+def test_stage_record_preserves_stage_timing_status_and_safe_error():
+    started = datetime(2026, 7, 14, 12, tzinfo=timezone.utc)
+    record = StageRecord(
+        stage=PipelineStage.RUNNING_RULES,
+        started_at=started,
+        ended_at=started,
+        status="completed",
+        error="sanitized failure message",
+    )
+
+    assert record.stage is PipelineStage.RUNNING_RULES
+    assert record.started_at == started
+    assert record.ended_at == started
+    assert record.status == "completed"
+    assert record.error == "sanitized failure message"
 
 
 def test_rule_result_and_finding_defaults():

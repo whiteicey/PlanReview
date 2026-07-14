@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -9,6 +10,7 @@ from app.domain.enums import (
     ExtractionMethod,
     OnMissing,
     Origin,
+    PipelineStage,
     ReviewStatus,
     RuleStatus,
     Severity,
@@ -78,6 +80,14 @@ class RuleDefinition(BaseModel):
     enabled: bool = True
     params: dict[str, Any] = Field(default_factory=dict)
     source_type: str = "DEMO_ONLY"
+
+
+class StageRecord(BaseModel):
+    stage: PipelineStage
+    started_at: datetime
+    ended_at: datetime | None = None
+    status: str
+    error: str | None = None
 
 
 class RuleResult(BaseModel):

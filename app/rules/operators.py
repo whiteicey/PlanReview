@@ -26,6 +26,7 @@ class OperatorOutcome:
     evidence_span_ids: list[str] = field(default_factory=list)
     involved_fact_ids: list[str] = field(default_factory=list)
     details: dict[str, Any] = field(default_factory=dict)
+    needs_human_review: bool = False
 
 
 def _unique(items: list[str]) -> list[str]:
