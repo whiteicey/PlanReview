@@ -23,6 +23,9 @@ _SAFE_SCALAR_OPTION_KEYS = (
     _SAFE_FLOAT_OPTION_KEYS | _SAFE_INT_OPTION_KEYS | _SAFE_BOOL_OPTION_KEYS
 )
 _SAFE_EVIDENCE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+_SAFE_OPTION_LOG_KEYS = frozenset(
+    {"temperature", "max_tokens", "top_p", "timeout", "stream", "seed", "presence_penalty", "frequency_penalty"}
+)
 _SENSITIVE_KEY_NAMES = frozenset(
     {
         "api_key",
@@ -152,6 +155,12 @@ def _safe_evidence_span_ids(span_ids: Iterable[Any]) -> list[str]:
     ]
 
 
+def _safe_model_identifier(model: Any) -> str:
+    if isinstance(model, str) and _SAFE_EVIDENCE_ID_PATTERN.fullmatch(model):
+        return model
+    return _REDACTED
+
+
 def redact_request_for_log(
     request: LLMRequest, provider_options: Mapping[str, Any] | None = None
 ) -> dict[str, Any]:
@@ -162,13 +171,20 @@ def redact_request_for_log(
     credentials, payloads, messages, and unknown values are never copied.
     """
     redacted: dict[str, Any] = {
-        "model": request.model,
+        "model": _safe_model_identifier(request.model),
         "system_prompt": _REDACTED,
         "user_content": _REDACTED,
         "evidence_span_ids": _safe_evidence_span_ids(request.evidence_span_ids),
     }
+    unknown_options = False
     for key, value in (provider_options or {}).items():
-        redacted[key] = _redact_option_value(key, value)
+        normalized_key = key.casefold().replace("-", "_") if isinstance(key, str) else ""
+        if normalized_key in _SAFE_OPTION_LOG_KEYS:
+            redacted[normalized_key] = _redact_option_value(normalized_key, value)
+        else:
+            unknown_options = True
+    if unknown_options:
+        redacted["redacted_options"] = _REDACTED
     return redacted
 
 

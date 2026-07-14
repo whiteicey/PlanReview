@@ -73,3 +73,25 @@ cd review && python -m pytest -v
 ```
 
 Concern remains the existing pytest configuration warning only.
+
+## Final logging-key hardening
+
+`redact_request_for_log` now validates `request.model` with the same bounded opaque identifier pattern and emits `[REDACTED]` for arbitrary model content. Provider options are written only under fixed safe output names; unknown input keys are not copied and are represented solely by the fixed `redacted_options` marker. Regression coverage includes document/key material in the model and provider option key.
+
+Changed files:
+
+- `app/llm/provider.py`
+- `tests/unit/test_llm_provider.py`
+- `.superpowers/sdd/task-15-report.md`
+
+Final verification output:
+
+```text
+cd review && python -m pytest tests/unit/test_llm_provider.py -v
+11 passed, 1 warning in 0.05s
+
+cd review && python -m pytest -v
+139 passed, 1 warning in 1.24s
+```
+
+Concern remains the existing `PytestConfigWarning: Unknown config option: asyncio_mode` only.

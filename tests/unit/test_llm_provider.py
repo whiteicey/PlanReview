@@ -97,8 +97,7 @@ def test_request_logging_redacts_body_and_sensitive_keys() -> None:
     assert redacted["model"] == "mock"
     assert redacted["user_content"] == "[REDACTED]"
     assert redacted["system_prompt"] == "[REDACTED]"
-    assert redacted["api_key"] == "[REDACTED]"
-    assert redacted["authorization"] == "[REDACTED]"
+    assert redacted["redacted_options"] == "[REDACTED]"
     assert redacted["temperature"] == 0
     assert "confidential document body" not in repr(redacted)
     assert "sk-secret" not in repr(redacted)
@@ -121,11 +120,7 @@ def test_request_logging_redacts_nested_credentials_and_all_body_bearing_options
 
     redacted = redact_request_for_log(request("FULL DOCUMENT BODY"), secrets_and_document)
 
-    assert redacted["private_key"] == "[REDACTED]"
-    assert redacted["headers"] == "[REDACTED]"
-    assert redacted["payload"] == "[REDACTED]"
-    assert redacted["messages"] == "[REDACTED]"
-    assert redacted["body"] == "[REDACTED]"
+    assert redacted["redacted_options"] == "[REDACTED]"
     assert redacted["temperature"] == 0
     assert redacted["max_tokens"] == 128
     rendered = repr(redacted)
@@ -150,9 +145,39 @@ def test_request_logging_does_not_copy_unknown_option_strings_or_nested_values()
         },
     )
 
-    assert redacted["custom_option"] == "[REDACTED]"
-    assert redacted["nested"] == "[REDACTED]"
+    assert redacted["redacted_options"] == "[REDACTED]"
     assert "document text hidden by default" not in repr(redacted)
+
+
+def test_request_logging_restricts_model_and_provider_option_output_keys() -> None:
+    redacted = redact_request_for_log(
+        LLMRequest(
+            model="FULL DOCUMENT BODY/private_key=secret",
+            system_prompt="system",
+            user_content="document body",
+            evidence_span_ids=["s1"],
+        ),
+        {
+            "document/key content": "FULL DOCUMENT PAYLOAD",
+            "temperature": 0.2,
+        },
+    )
+
+    assert redacted["model"] == "[REDACTED]"
+    assert redacted["temperature"] == 0.2
+    assert redacted["redacted_options"] == "[REDACTED]"
+    assert "document/key content" not in repr(redacted)
+    assert "FULL DOCUMENT PAYLOAD" not in repr(redacted)
+    assert set(redacted).issubset(
+        {
+            "model",
+            "system_prompt",
+            "user_content",
+            "evidence_span_ids",
+            "temperature",
+            "redacted_options",
+        }
+    )
 
 
 def test_request_logging_type_constrains_allowlisted_options_and_evidence_ids() -> None:
