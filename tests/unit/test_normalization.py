@@ -4,6 +4,7 @@ import pytest
 
 from app.domain.enums import ExtractionMethod
 from app.domain.schemas import ParameterFact
+from app.extraction import normalization
 from app.extraction.normalization import normalize_facts_units, normalize_value
 
 
@@ -39,6 +40,15 @@ def test_unknown_or_incompatible_unit_does_not_guess():
     # A mass cannot be interpreted as a volumetric flow without an explicit
     # density; no dimensional conversion or business guess is permitted.
     assert normalize_value("5", "kg") == (None, None)
+
+
+def test_incompatible_source_target_mapping_is_rejected(monkeypatch):
+    monkeypatch.setitem(
+        normalization._UNIT_MAP,
+        "故意不兼容",
+        (1.0, "meter", "second", "故意不兼容"),
+    )
+    assert normalize_value("5", "故意不兼容") == (None, None)
 
 
 def test_fact_update_is_immutable_including_canonical_unit():

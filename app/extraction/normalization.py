@@ -12,24 +12,23 @@ from app.domain.schemas import ParameterFact
 
 # Keep Pint's registry local to this module and expose only units that have an
 # explicit business meaning in extracted facts.  The custom dimensions prevent
-# calendar months and well counts from being converted to unrelated quantities.
+# calendar months and counts from being converted to unrelated quantities.
 _UREG = UnitRegistry(autoconvert_offset_to_baseunit=True)
-_UREG.define("well = [well]")
 _UREG.define("calendar_month = [calendar_month]")
 _UREG.define("count = [count]")
 
-# raw unit -> (Pint source expression, Pint target expression, public name).
-# The target conversion is always checked by Pint, rather than multiplying a
-# hand-maintained factor for ordinary units.  The Chinese ten-thousand unit is
-# a scalar prefix and therefore retains its exact required factor explicitly.
-_UNIT_MAP: dict[str, tuple[float, str, str]] = {
-    "万m³/d": (10000.0, "meter ** 3 / day", "m^3/day"),
-    "万m3/d": (10000.0, "meter ** 3 / day", "m^3/day"),
-    "m³/d": (1.0, "meter ** 3 / day", "m^3/day"),
-    "m3/d": (1.0, "meter ** 3 / day", "m^3/day"),
-    "口": (1.0, "count", "口"),
-    "个月": (1.0, "calendar_month", "个月"),
-    "%": (1.0, "percent", "%"),
+# raw unit -> (numeric factor, Pint source expression, Pint canonical target
+# expression, public canonical name).  Both expressions are intentional: Pint
+# validates source-to-target dimensional compatibility at conversion time. The
+# Chinese ten-thousand prefix retains its exact required factor explicitly.
+_UNIT_MAP: dict[str, tuple[float, str, str, str]] = {
+    "万m³/d": (10000.0, "meter ** 3 / day", "meter ** 3 / day", "m^3/day"),
+    "万m3/d": (10000.0, "meter ** 3 / day", "meter ** 3 / day", "m^3/day"),
+    "m³/d": (1.0, "meter ** 3 / day", "meter ** 3 / day", "m^3/day"),
+    "m3/d": (1.0, "meter ** 3 / day", "meter ** 3 / day", "m^3/day"),
+    "口": (1.0, "count", "count", "口"),
+    "个月": (1.0, "calendar_month", "calendar_month", "个月"),
+    "%": (1.0, "percent", "percent", "%"),
 }
 
 _NUMBER = re.compile(
@@ -69,11 +68,12 @@ def normalize_value(
     if mapping is None:
         return None, None
 
-    factor, source_expression, public_unit = mapping
+    factor, source_expression, target_expression, public_unit = mapping
     try:
         quantity = (value * factor) * _UREG.parse_units(source_expression)
-        # Converting to the target is the dimensionality validation boundary.
-        normalized = quantity.to(_UREG.parse_units(source_expression))
+        # Converting to the explicit canonical target is the dimensionality
+        # validation boundary; incompatible mappings must fail closed.
+        normalized = quantity.to(_UREG.parse_units(target_expression))
     except (DimensionalityError, PintError, TypeError, ValueError):
         return None, None
     normalized_value = normalized.magnitude
