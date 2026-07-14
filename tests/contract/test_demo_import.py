@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,13 @@ def _load_import_demo():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _external_demo_root(module) -> Path:
+    try:
+        return module.resolve_demo_root()
+    except module.DemoRootNotFound as exc:
+        pytest.skip(f"external DEMO package unavailable: {exc}")
 
 
 def test_run_script_is_loopback_only():
@@ -40,28 +48,31 @@ def test_demo_root_uses_only_explicit_resolution(monkeypatch, tmp_path: Path):
         module.resolve_demo_root()
 
 
-def test_import_demo_reads_assets_without_copying_docx(monkeypatch, tmp_path: Path):
+def test_external_demo_fixture_is_honest_or_skipped(monkeypatch):
     module = _load_import_demo()
-    demo_root = tmp_path / "本地版示例数据包"
-    rules = demo_root / "rules"
-    rules.mkdir(parents=True)
-    (rules / "ruleset-demo-0.1.yaml").write_text(
-        "metadata:\n  source_type: DEMO_ONLY\nrules: []\n", encoding="utf-8"
-    )
-    (rules / "terminology-demo-0.1.yaml").write_text(
-        "metadata:\n  source_type: DEMO_ONLY\naliases: {}\n", encoding="utf-8"
-    )
-    source = tmp_path / "outside" / "sample.docx"
-    source.parent.mkdir()
-    source.write_bytes(b"not parsed here")
+    root = _external_demo_root(module)
+    assert root.is_dir()
+    assert (root / "rules" / "ruleset-demo-0.1.yaml").is_file()
+    assert (root / "rules" / "terminology-demo-0.1.yaml").is_file()
+
+
+def test_import_demo_valid_package_uses_production_loaders_without_copy(monkeypatch, tmp_path: Path):
+    module = _load_import_demo()
+    root = _external_demo_root(module)
+    plans = root / "plans"
+    docx_candidates = sorted(plans.glob("*.docx"))
+    if not docx_candidates:
+        pytest.skip(f"external DEMO package has no DOCX fixture under {plans}")
+    source = docx_candidates[0]
     storage = tmp_path / "storage"
-    monkeypatch.setenv("REVIEW_DEMO_ROOT", str(demo_root))
+    monkeypatch.setenv("REVIEW_DEMO_ROOT", str(root))
 
     imported = module.import_demo(source, storage_root=storage)
 
     assert imported.source_docx == source.resolve()
-    assert imported.rules["metadata"]["source_type"] == "DEMO_ONLY"
-    assert imported.terminology["aliases"] == {}
+    assert imported.rules
+    assert all(rule.source_type == "DEMO_ONLY" for rule in imported.rules)
+    assert imported.terminology.canonicalize("部署井数") == "开发井总数"
     assert not storage.exists()
 
 
@@ -71,3 +82,36 @@ def test_import_demo_rejects_non_docx_and_missing_files(tmp_path: Path):
         module.validate_docx(tmp_path / "sample.pdf")
     with pytest.raises(module.DemoImportError, match="不存在"):
         module.validate_docx(tmp_path / "missing.docx")
+
+
+def test_import_demo_accepts_established_top_level_schemas(monkeypatch, tmp_path: Path):
+    module = _load_import_demo()
+    demo_root = tmp_path / "本地版示例数据包"
+    rules = demo_root / "rules"
+    rules.mkdir(parents=True)
+    (rules / "ruleset-demo-0.1.yaml").write_text(
+        "rules:\n"
+        "  - rule_id: R1\n"
+        "    version: '0.1'\n"
+        "    name: test\n"
+        "    category: completeness\n"
+        "    severity: medium\n"
+        "    operator: all_equal\n"
+        "    on_missing: unknown\n"
+        "    source_type: DEMO_ONLY\n",
+        encoding="utf-8",
+    )
+    (rules / "terminology-demo-0.1.yaml").write_text(
+        "aliases:\n  开发井总数: [部署井数]\n", encoding="utf-8"
+    )
+    source = tmp_path / "outside" / "sample.docx"
+    source.parent.mkdir()
+    source.write_bytes(b"not parsed here")
+    storage = tmp_path / "storage"
+    monkeypatch.setenv("REVIEW_DEMO_ROOT", str(demo_root))
+
+    imported = module.import_demo(source, storage_root=storage)
+
+    assert imported.rules[0].rule_id == "R1"
+    assert imported.terminology.canonicalize("部署井数") == "开发井总数"
+    assert not storage.exists()

@@ -1,18 +1,30 @@
-"""Load the checked-in demo rules without copying source documents.
+"""Load DEMO_ONLY rules without copying source documents.
 
-The demo package is deliberately kept outside this repository.  This module only
-reads its YAML files and records the caller-provided DOCX path; it never writes a
-source document to ``storage/`` or any other project directory.
+The demo package is deliberately kept outside this repository. This module reads
+its YAML files through the production loaders and records the caller-provided
+DOCX path; it never writes a source document to ``storage/``.
 """
 
 import argparse
 import json
 import os
+import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+# Make ``python scripts/import_demo.py`` behave like a project-root invocation.
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 import yaml
+
+from app.domain.exceptions import RuleLoadError
+from app.domain.schemas import RuleDefinition
+from app.extraction.terminology import TerminologyMap
+from app.rules.loader import load_rules, load_terminology
 
 
 class DemoImportError(RuntimeError):
@@ -25,14 +37,14 @@ class DemoRootNotFound(DemoImportError):
 
 @dataclass(frozen=True)
 class DemoImport:
-    """References and parsed metadata for one externally supplied demo DOCX."""
+    """References and validated metadata for one externally supplied DOCX."""
 
     demo_root: Path
     source_docx: Path
     rules_path: Path
     terminology_path: Path
-    rules: dict[str, Any]
-    terminology: dict[str, Any]
+    rules: list[RuleDefinition]
+    terminology: TerminologyMap
 
 
 def resolve_demo_root() -> Path:
@@ -42,9 +54,7 @@ def resolve_demo_root() -> Path:
         candidate = Path(configured)
         if candidate.is_dir():
             return candidate.resolve()
-        raise DemoRootNotFound(
-            f"REVIEW_DEMO_ROOT 不存在或不是目录: {candidate}"
-        )
+        raise DemoRootNotFound(f"REVIEW_DEMO_ROOT 不存在或不是目录: {candidate}")
 
     candidates = (
         Path(__file__).parents[3] / "本地版示例数据包",
@@ -54,13 +64,11 @@ def resolve_demo_root() -> Path:
         if candidate.is_dir():
             return candidate.resolve()
     rendered = "、".join(str(path) for path in candidates)
-    raise DemoRootNotFound(
-        "找不到示例数据包；请设置 REVIEW_DEMO_ROOT。已检查: " + rendered
-    )
+    raise DemoRootNotFound("找不到示例数据包；请设置 REVIEW_DEMO_ROOT。已检查: " + rendered)
 
 
 def validate_docx(source: Path) -> Path:
-    """Validate an externally supplied, existing DOCX path without opening/copying it."""
+    """Validate an existing, externally supplied DOCX without copying it."""
     source = Path(source)
     if not source.exists():
         raise DemoImportError(f"DOCX 文件不存在: {source}")
@@ -78,9 +86,6 @@ def _read_yaml(path: Path, label: str) -> dict[str, Any]:
         raise DemoImportError(f"无法读取{label} YAML: {path}: {exc}") from exc
     if not isinstance(value, dict):
         raise DemoImportError(f"{label} YAML 根节点必须是对象: {path}")
-    metadata = value.get("metadata")
-    if not isinstance(metadata, dict) or metadata.get("source_type") != "DEMO_ONLY":
-        raise DemoImportError(f"{label} 必须明确标记 source_type: DEMO_ONLY: {path}")
     return value
 
 
@@ -91,13 +96,65 @@ def _asset_path(root: Path, relative: str, label: str) -> Path:
     return path
 
 
-def import_demo(source_docx: Path, *, storage_root: Path | None = None) -> DemoImport:
-    """Read demo rules/terminology and retain only an external DOCX reference.
+def _load_production_rules(path: Path) -> list[RuleDefinition]:
+    document = _read_yaml(path, "规则")
+    rows = document.get("rules")
+    if not isinstance(rows, list):
+        raise DemoImportError("规则 YAML 必须包含顶层 rules 列表")
 
-    ``storage_root`` is accepted for callers that already have a storage setting,
-    but is intentionally unused: importing a demo must not copy source files into
-    application storage.
-    """
+    normalized_rows: list[dict[str, Any]] = []
+    known_fields = set(RuleDefinition.model_fields)
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise DemoImportError(f"rules[{index}] 必须是对象")
+        if row.get("source_type") != "DEMO_ONLY":
+            raise DemoImportError(f"rules[{index}] 必须明确 source_type: DEMO_ONLY")
+        normalized = {key: value for key, value in row.items() if key in known_fields}
+        params = dict(row.get("params") or {})
+        params.update({key: value for key, value in row.items() if key not in known_fields})
+        # Older generated demo bundles used ``suspected`` for missing data,
+        # while the production enum deliberately uses UNKNOWN. Preserve the
+        # original intent as metadata but validate through the production model.
+        if normalized.get("on_missing") == "suspected":
+            params["demo_on_missing"] = "suspected"
+            normalized["on_missing"] = "unknown"
+        normalized["params"] = params
+        normalized_rows.append(normalized)
+
+    # The production loader intentionally validates the established top-level
+    # ``rules`` schema. Metadata is package-level compatibility data, so it is
+    # removed before handing the normalized document to that loader.
+    with tempfile.TemporaryDirectory(prefix="review-demo-rules-") as temp_dir:
+        normalized_path = Path(temp_dir) / path.name
+        normalized_path.write_text(
+            yaml.safe_dump({"rules": normalized_rows}, allow_unicode=True, sort_keys=False),
+            encoding="utf-8",
+        )
+        try:
+            return load_rules(normalized_path)
+        except RuleLoadError as exc:
+            raise DemoImportError(f"规则校验失败: {exc}") from exc
+
+
+def _load_production_terminology(path: Path) -> TerminologyMap:
+    document = _read_yaml(path, "术语")
+    aliases = document.get("aliases")
+    if aliases is None:
+        raise DemoImportError("术语 YAML 必须包含顶层 aliases 对象")
+    with tempfile.TemporaryDirectory(prefix="review-demo-terminology-") as temp_dir:
+        normalized_path = Path(temp_dir) / path.name
+        normalized_path.write_text(
+            yaml.safe_dump({"aliases": aliases}, allow_unicode=True, sort_keys=False),
+            encoding="utf-8",
+        )
+        try:
+            return load_terminology(normalized_path)
+        except RuleLoadError as exc:
+            raise DemoImportError(f"术语校验失败: {exc}") from exc
+
+
+def import_demo(source_docx: Path, *, storage_root: Path | None = None) -> DemoImport:
+    """Load production-validated demo rules and terminology without file copying."""
     del storage_root
     source = validate_docx(source_docx)
     root = resolve_demo_root()
@@ -108,8 +165,8 @@ def import_demo(source_docx: Path, *, storage_root: Path | None = None) -> DemoI
         source_docx=source,
         rules_path=rules_path,
         terminology_path=terminology_path,
-        rules=_read_yaml(rules_path, "规则"),
-        terminology=_read_yaml(terminology_path, "术语"),
+        rules=_load_production_rules(rules_path),
+        terminology=_load_production_terminology(terminology_path),
     )
 
 
@@ -121,19 +178,15 @@ def main(argv: list[str] | None = None) -> int:
         result = import_demo(args.docx)
     except DemoImportError as exc:
         parser.error(str(exc))
-    print(
-        json.dumps(
-            {
-                "demo_root": str(result.demo_root),
-                "source_docx": str(result.source_docx),
-                "rules": str(result.rules_path),
-                "terminology": str(result.terminology_path),
-                "source_type": "DEMO_ONLY",
-                "copied_to_storage": False,
-            },
-            ensure_ascii=False,
-        )
-    )
+    print(json.dumps({
+        "demo_root": str(result.demo_root),
+        "source_docx": str(result.source_docx),
+        "rules": str(result.rules_path),
+        "terminology": str(result.terminology_path),
+        "rule_count": len(result.rules),
+        "source_type": "DEMO_ONLY",
+        "copied_to_storage": False,
+    }, ensure_ascii=False))
     return 0
 
 
