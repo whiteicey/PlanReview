@@ -2,12 +2,14 @@
 
 ## Status
 
-Completed and hardened after review. `CredentialStore` uses only `keyring` and now fails closed on Windows unless `keyring.get_keyring()` is an exact Windows `WinVaultKeyring` backend (`keyring.backends.Windows`, class `WinVaultKeyring`). Rejected backends are refused before `set_password`, so credentials are not sent to unsafe storage. There is no local caching or plaintext persistence. Provider/service names are bounded safe identifiers, and all keyring failures expose only the provider name. Missing credentials can be deleted idempotently.
+Completed and hardened after final review. `CredentialStore` uses only `keyring` and fails closed on Windows unless `keyring.get_keyring()` returns an object whose exact type identity is the genuine imported `keyring.backends.Windows.WinVaultKeyring` class (`type(backend) is WinVaultKeyring`). Mutable module/name metadata and spoof classes are rejected. Backend validation runs before every get/set/delete call, so rejected backends never receive credentials or provider operations. There is no local caching or plaintext persistence. Provider/service names are bounded safe identifiers, and all keyring failures expose only the provider name. Missing credentials can be deleted idempotently.
 
 ## Commits
 
 - `c62cf2f feat: store provider keys only in Windows Credential Manager`
-- Follow-up hardening commit pending.
+- `1959f98 fix: require Windows Credential Manager backend`
+- `5af0ef4 docs: record credential backend hardening`
+- Follow-up identity-hardening commit pending.
 
 ## Tests and output
 
@@ -18,25 +20,18 @@ python -m pytest tests/security/test_credentials.py -v
 1 collection error: ModuleNotFoundError: No module named 'keyring'
 ```
 
-Initial focused verification:
+Final focused verification:
 
 ```text
 python -m pytest tests/security/test_credentials.py -v
-4 passed, 1 warning in 0.12s
+8 passed, 1 warning in 0.16s
 ```
 
-Review-hardening focused verification:
-
-```text
-python -m pytest tests/security/test_credentials.py -v
-6 passed, 1 warning in 0.13s
-```
-
-Review-hardening full regression verification:
+Final full regression verification:
 
 ```text
 python -m pytest -q
-193 passed, 1 warning in 5.51s
+195 passed, 1 warning in 5.53s
 ```
 
 The warning is the existing configuration warning:
@@ -54,6 +49,7 @@ PytestConfigWarning: Unknown config option: asyncio_mode
 
 ## Concerns
 
-- Backend validation is intentionally exact and fail-closed. Any alternate backend, wrapper, proxy, or non-Windows platform is rejected rather than risking plaintext or unsafe persistence.
+- Backend validation is exact and fail-closed. Alternate backends, wrappers, proxies, spoof classes, or non-Windows platforms are rejected rather than risking plaintext or unsafe persistence.
+- Tests use the genuine imported `WinVaultKeyring` class for the accepted path and separate spoof/file classes for rejected paths; no mutable metadata is trusted.
 - The active backend check runs before every get/set/delete operation, so runtime backend changes cannot bypass the policy.
 - Provider/service validation is intentionally conservative and rejects whitespace, path separators, and other unsafe characters.
