@@ -73,17 +73,19 @@ def test_anonymous_package_contains_only_honest_anonymized_export_data(tmp_path)
 
     assert "不是正式审查结论" in payload["disclaimer"]
     assert "case_id" not in payload
-    assert payload["rule_versions"] == [{"rule_id": "rule-0001", "version": "2026.07"}]
+    assert payload["rule_versions"] == [{"rule_id": "rule-0001", "version": "version-0001"}]
     assert payload["evidence_text_hashes"] == {"evidence-0001": "a" * 64}
     assert payload["metrics"] == {
         "finding_count": 1,
-        "review_state_counts": {"confirmed": 1},
+        "review_state_counts": {"reviewstatus-0002": 1},
         "accuracy": "not_measured",
         "recall": "not_measured",
         "time_saved": "not_measured",
         "cost": "not_measured",
     }
-    assert payload["findings"][0]["review_status"] == "confirmed"
+    assert payload["findings"][0]["review_status"] == "reviewstatus-0002"
+    assert payload["findings"][0]["category"] == "category-0001"
+    assert payload["findings"][0]["severity"] == "severity-0001"
     assert "title" not in payload["findings"][0]
     assert "description" not in payload["findings"][0]
     assert "suggestion" not in payload["findings"][0]

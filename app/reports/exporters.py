@@ -11,6 +11,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from docx import Document
 from openpyxl import Workbook
 
+from app.domain.enums import Origin, ReviewStatus, Severity
 from app.review.pipeline import ReviewRun
 from app.settings import get_settings
 
@@ -20,6 +21,10 @@ _FINDING_COLUMNS = (
 )
 _HASH_RE = re.compile(r"[0-9a-f]{64}\Z")
 _SAFE_LABEL = re.compile(r"[A-Za-z0-9_.:-]{1,128}\Z")
+_ALLOWED_CATEGORIES = frozenset({
+    "capacity", "completeness", "consistency", "version-change", "traceability",
+    "unknown", "other",
+})
 
 
 def _rows(run: ReviewRun) -> list[dict[str, str | None]]:
@@ -90,25 +95,28 @@ def export_anonymous_package(run: ReviewRun, target_zip: Path) -> Path:
         "findings": [
             {
                 "finding_id": f"finding-{index:04d}",
-                "origin": item.origin.value,
-                "category": _safe_label(item.category, "category"),
-                "severity": item.severity.value,
+                "origin": _opaque_enum(item.origin, Origin, "origin"),
+                "category": _opaque_category(item.category),
+                "severity": _opaque_enum(item.severity, Severity, "severity"),
                 "evidence_span_ids": [span_aliases[span_id] for span_id in item.evidence_span_ids],
-                "review_status": item.review_status.value,
+                "review_status": _opaque_enum(item.review_status, ReviewStatus, "review status"),
             }
             for index, item in enumerate(run.findings, start=1)
         ],
         "rule_versions": [
             {
                 "rule_id": f"rule-{index:04d}",
-                "version": _safe_label(_rule_version(result), "rule version"),
+                "version": f"version-{index:04d}",
             }
             for index, result in enumerate(_versioned_rule_results(run), start=1)
         ],
         "evidence_text_hashes": hashes,
         "metrics": {
             "finding_count": len(run.findings),
-            "review_state_counts": dict(sorted(review_counts.items())),
+            "review_state_counts": {
+                _opaque_enum(ReviewStatus(state), ReviewStatus, "review status"): count
+                for state, count in sorted(review_counts.items())
+            },
             "accuracy": "not_measured",
             "recall": "not_measured",
             "time_saved": "not_measured",
@@ -167,8 +175,17 @@ def _anonymous_evidence_hashes(run: ReviewRun, aliases: dict[str, str]) -> dict[
     return hashes
 
 
-def _safe_label(value: str | None, field_name: str) -> str:
-    """Allow only bounded structured labels; never serialize arbitrary prose."""
-    if not isinstance(value, str) or _SAFE_LABEL.fullmatch(value) is None:
-        raise ValueError(f"{field_name} must be a bounded structured label")
-    return value
+def _opaque_enum(value, enum_type, field_name: str) -> str:
+    """Expose only a finite enum member, mapped to an opaque stable alias."""
+    try:
+        member = value if isinstance(value, enum_type) else enum_type(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} is not an approved taxonomy value") from exc
+    return f"{enum_type.__name__.lower()}-{list(enum_type).index(member) + 1:04d}"
+
+
+def _opaque_category(value: str) -> str:
+    """Map the finite supported category taxonomy to opaque aliases."""
+    if value not in _ALLOWED_CATEGORIES:
+        return "category-unknown"
+    return f"category-{sorted(_ALLOWED_CATEGORIES).index(value) + 1:04d}"

@@ -17,6 +17,7 @@ Completed. Implemented Excel, Word, and strict anonymous finding exports with th
 - `481851d feat: export findings with disclaimer and anonymous package guard`
 - `5381898 fix: migrate export metadata columns`
 - `08c239f fix: fail closed on anonymous finding prose`
+- Pending follow-up: opaque taxonomy hardening
 
 ## Exact tests/output
 
@@ -48,15 +49,22 @@ python -m pytest tests/unit/test_exporters.py tests/security/test_anonymous_expo
 36 passed, 1 warning in 4.65s
 ```
 
+Opaque-taxonomy focused exporters:
+
+```text
+python -m pytest tests/unit/test_exporters.py tests/security/test_anonymous_export.py tests/security/test_anonymous_export_fields.py -v
+5 passed, 1 warning in 0.76s
+```
+
 Full suite:
 
 ```text
 python -m pytest -v
-242 passed, 1 warning in 7.28s
+243 passed, 1 warning in 7.39s
 ```
 
 The warning is pre-existing pytest configuration: `PytestConfigWarning: Unknown config option: asyncio_mode`.
 
 ## Concerns
 
-- Existing SQLite databases receive additive migration for the new rule-version and evidence-hash columns at session creation. Legacy in-memory/manual runs without retained evidence hashes export anonymous findings with no hash entry rather than fabricating a hash.
+- Existing SQLite databases receive additive migration for the new rule-version and evidence-hash columns at session creation. Legacy in-memory/manual runs without retained evidence hashes export anonymous findings with no hash entry rather than fabricating a hash. Categories, origins, severities, review states, and rule versions are emitted only as opaque finite-taxonomy aliases.

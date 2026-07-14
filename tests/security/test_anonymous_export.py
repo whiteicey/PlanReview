@@ -48,6 +48,8 @@ def test_anonymous_package_excludes_identity_source_paths_and_raw_documents(tmp_
         payload = json.loads(text)
 
     assert payload["findings"][0]["evidence_span_ids"] == ["evidence-0001"]
+    assert payload["findings"][0]["category"] == "category-unknown"
+    assert payload["findings"][0]["severity"] == "severity-0001"
     assert "description" not in payload["findings"][0]
     assert payload["evidence_text_hashes"] == {"evidence-0001": "b" * 64}
     for value in forbidden_values.values():
