@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from enum import Enum
+import json
+import re
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
@@ -51,6 +53,12 @@ _SECRET_OR_BODY_MARKERS = (
     "document_text",
     "raw_content",
     "full_body",
+    "request",
+    "response",
+    "document",
+    "docx",
+    "原始",
+    "全文",
 )
 
 
@@ -81,6 +89,7 @@ class ReviewRepository:
         """Commit safe case metadata and relative file references."""
         if not isinstance(case, CaseRecord) or not case.case_id:
             raise ValueError("case_id is required")
+        _safe_text(case.case_id, "case_id")
         self._validate_case_files(case.files)
         safe_statistics = _sanitize_json(case.statistics)
         existing = self.session.get(CaseORM, case.case_id)
@@ -107,6 +116,8 @@ class ReviewRepository:
         """Replace a case's persisted run atomically with sanitized ORM rows."""
         if not isinstance(run, ReviewRun) or not run.case_id:
             raise ValueError("run.case_id is required")
+        _safe_text(run.case_id, "case_id")
+        _safe_text(run.final_status, "final status")
         case = self.session.get(CaseORM, run.case_id)
         if case is None:
             case = CaseORM(case_id=run.case_id, statistics={})
@@ -240,6 +251,7 @@ class ReviewRepository:
     @staticmethod
     def _validate_case_files(files: list[StoredFile]) -> None:
         for item in files:
+            _safe_text(item.safe_name, "safe file name")
             path = item.storage_relative_path
             native = Path(path)
             windows = PureWindowsPath(path)
@@ -272,7 +284,7 @@ def _rule_result_row(result: RuleResult, position: int, review_run_id: int) -> R
         severity=result.severity.value,
         category=result.category,
         parameter=result.parameter,
-        message=result.message,
+        message=_safe_text(result.message, "rule result message"),
         evidence_span_ids=list(result.evidence_span_ids),
         involved_fact_ids=list(result.involved_fact_ids),
         needs_human_review=result.needs_human_review,
@@ -289,9 +301,9 @@ def _finding_row(finding: Finding, position: int, review_run_id: int) -> Finding
         category=finding.category,
         severity=finding.severity.value,
         parameter=finding.parameter,
-        title=finding.title,
-        description=finding.description,
-        suggestion=finding.suggestion,
+        title=_safe_text(finding.title, "finding title"),
+        description=_safe_text(finding.description, "finding description"),
+        suggestion=_safe_text(finding.suggestion, "finding suggestion"),
         rule_id=finding.rule_id,
         evidence_span_ids=list(finding.evidence_span_ids),
         needs_human_review=finding.needs_human_review,
@@ -347,6 +359,18 @@ def _to_plain_json(value: Any) -> Any:
     return value
 
 
+def _safe_text(value: str | None, field_name: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string or None")
+    if len(value) > 4_000:
+        raise ValueError(f"{field_name} exceeds 4000 characters")
+    if _contains_prohibited_content(value):
+        raise ValueError(f"{field_name} contains forbidden secret or body content")
+    return value
+
+
 def _sanitize_note(note: str | None) -> str | None:
     """Fail closed for secrets, request bodies, and document content in notes."""
     if note is None:
@@ -355,10 +379,7 @@ def _sanitize_note(note: str | None) -> str | None:
         raise TypeError("human note must be a string or None")
     if len(note) > 4_000:
         raise ValueError("human note exceeds 4000 characters")
-    normalized = note.casefold()
-    if any(marker in normalized for marker in _NOTE_FORBIDDEN_MARKERS):
-        raise ValueError("human note contains forbidden secret or body content")
-    if _looks_like_secret(note) or _looks_like_full_body(note):
+    if _contains_prohibited_content(note):
         raise ValueError("human note contains forbidden secret or body content")
     return note
 
@@ -384,40 +405,62 @@ _NOTE_FORBIDDEN_MARKERS = (
     "raw_docx",
     "full body",
     "full_body",
+    "document text",
+    "document content",
+    "raw docx",
+    "原始 docx",
+    "原始文本",
+    "全文内容",
 )
 
 
-def _looks_like_secret(note: str) -> bool:
-    import re
+def _contains_prohibited_content(value: str) -> bool:
+    normalized = value.casefold()
+    if any(marker in normalized for marker in _NOTE_FORBIDDEN_MARKERS):
+        return True
+    if re.search(r"(?i)\b(?:sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{12,}|AKIA[0-9A-Z]{16})\b", value):
+        return True
+    if re.search(r"(?i)\b(?:api[_-]?key|token|secret|password)\s*[:=]\s*\S+", value):
+        return True
+    if re.search(r"(?i)\bbearer\s+[A-Za-z0-9._-]{12,}", value):
+        return True
+    if _looks_like_full_body(value):
+        return True
+    return False
 
-    return bool(
-        re.search(r"(?i)\b(?:sk-[A-Za-z0-9_-]{12,}|bearer\s+[A-Za-z0-9._-]{12,})\b", note)
-        or re.search(r"(?i)\b(?:api[_-]?key|token|secret|password)\s*[:=]\s*\S+", note)
+
+def _looks_like_full_body(value: str) -> bool:
+    # Persisted prose must remain a bounded review summary, never a body dump.
+    return value.count("\n") >= 3 or len(value) > 1_000 or (
+        value.lstrip().startswith(("{", "[")) and len(value) > 160
     )
 
 
-def _looks_like_full_body(note: str) -> bool:
-    # Notes are short expert annotations, not a transport/document body. Reject
-    # explicit body-shaped markers and unusually large multi-line content.
-    return note.count("\n") >= 3 or len(note) > 1_000
-
-
 def _sanitize_json(value: Any) -> Any:
-    """Drop credential/body-bearing JSON keys and retain plain structured metadata."""
+    """Allow only bounded metadata and reject prohibited scalar content."""
     if isinstance(value, Enum):
         return value.value
     if isinstance(value, datetime | date):
         return value.isoformat()
-    if value is None or isinstance(value, str | int | float | bool):
+    if value is None or isinstance(value, int | float | bool):
         return value
+    if isinstance(value, str):
+        return _safe_text(value, "metadata value")
     if isinstance(value, list | tuple):
+        if len(value) > 100:
+            raise ValueError("metadata list exceeds 100 items")
         return [_sanitize_json(item) for item in value]
     if isinstance(value, dict):
-        return {
-            str(key): _sanitize_json(item)
-            for key, item in value.items()
-            if not _is_sensitive_key(str(key))
-        }
+        if len(value) > 100:
+            raise ValueError("metadata object exceeds 100 fields")
+        output = {}
+        for key, item in value.items():
+            raw_key = str(key)
+            if _is_sensitive_key(raw_key):
+                continue
+            safe_key = _safe_text(raw_key, "metadata key")
+            output[safe_key] = _sanitize_json(item)
+        return output
     raise TypeError(f"unsupported persistence metadata type: {type(value).__name__}")
 
 
