@@ -2,7 +2,7 @@
 
 ## Status
 
-Completed. Added real SQLAlchemy 2.x SQLite ORM persistence for `cases`, `case_files`, `review_runs`, `rule_results`, `findings`, and `recycle_bin`. Repository writes commit and refresh; fresh sessions hydrate facts, rule results, findings, stages, and final status directly from SQLite. Field-aware facts preserve safe `source_document` and validate fact/span identifiers during serialization and fresh-session hydration. Case metadata accepts only SHA-256 file metadata, bounded case/file identifiers, portable `.docx` basename names (no separators/traversal/roots, max 255), and normalized POSIX-relative storage paths. Findings support case-scoped expert-review updates. Cases move to a database-backed recycle bin; `save_case` and `save_run` reject recycled cases and no implicit restore exists.
+Completed. Added real SQLAlchemy 2.x SQLite ORM persistence for `cases`, `case_files`, `review_runs`, `rule_results`, `findings`, and `recycle_bin`. Repository writes commit and refresh; fresh sessions hydrate facts, rule results, findings, stages, and final status directly from SQLite. Field-aware facts preserve safe Unicode `source_document` metadata and validate fact/span identifiers during serialization and fresh-session hydration. Case metadata accepts only SHA-256 file metadata, bounded case/file identifiers, portable Unicode `.docx` basename names (no separators/traversal/roots, max 255), and normalized POSIX-relative storage paths. Findings support case-scoped expert-review updates. Cases move to a database-backed recycle bin; `save_case` and `save_run` reject recycled cases and no implicit restore exists.
 
 All mutating repository methods use rollback guards around ORM mutation, flush, and commit. The intentionally scoped review interface is `update_finding_review(case_id, finding_id, status, note)`; the prior unscoped local-ID form is not retained because it permits ambiguous cross-case updates. Reuse-after-failure coverage confirms sessions remain usable. Content checks cover API keys, generic tokens, authorization/Bearer values, AWS keys, GitHub tokens including `github_pat`, Google `AIza` keys, embedded JWTs, PEM private keys, request/response payload markers, raw document markers, and bounded JSON/prose.
 
@@ -27,14 +27,14 @@ Final review focused verification:
 
 ```text
 python -m pytest tests/unit/test_repository.py tests/security/test_no_secrets_in_persistence.py -q
-36 passed, 1 warning in 4.58s
+38 passed, 1 warning in 4.80s
 ```
 
 Final full regression verification:
 
 ```text
 python -m pytest -q
-185 passed, 1 warning in 5.24s
+187 passed, 1 warning in 5.49s
 ```
 
 The remaining warning is the existing `PytestConfigWarning: Unknown config option: asyncio_mode`.
