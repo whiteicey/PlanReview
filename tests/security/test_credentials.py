@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import keyring
 import pytest
+from keyring.backends.Windows import WinVaultKeyring
 
 from app.security.credentials import CredentialStore
 
 
-class WinVaultKeyring:
+class SpoofedWinVaultKeyring:
     __module__ = "keyring.backends.Windows"
 
 
@@ -38,9 +39,10 @@ def test_credentials_use_keyring(monkeypatch):
     assert store.get_key("anthropic") is None
 
 
-def test_rejected_backend_never_receives_key(monkeypatch):
+@pytest.mark.parametrize("backend_factory", [FileBackend, SpoofedWinVaultKeyring])
+def test_rejected_backend_never_receives_key(monkeypatch, backend_factory):
     calls = []
-    monkeypatch.setattr(keyring, "get_keyring", lambda: FileBackend())
+    monkeypatch.setattr(keyring, "get_keyring", backend_factory)
     monkeypatch.setattr(keyring, "set_password", lambda *args: calls.append(args))
 
     with pytest.raises(RuntimeError, match="anthropic") as error:
@@ -48,6 +50,21 @@ def test_rejected_backend_never_receives_key(monkeypatch):
 
     assert "secret-value" not in str(error.value)
     assert calls == []
+
+
+def test_rejected_backend_never_receives_get_or_delete(monkeypatch):
+    get_calls = []
+    delete_calls = []
+    monkeypatch.setattr(keyring, "get_keyring", lambda: FileBackend())
+    monkeypatch.setattr(keyring, "get_password", lambda *args: get_calls.append(args))
+    monkeypatch.setattr(keyring, "delete_password", lambda *args: delete_calls.append(args))
+
+    for operation in (lambda: CredentialStore().get_key("anthropic"), lambda: CredentialStore().delete_key("anthropic")):
+        with pytest.raises(RuntimeError, match="anthropic"):
+            operation()
+
+    assert get_calls == []
+    assert delete_calls == []
 
 
 def test_provider_names_are_validated_before_keyring_calls(monkeypatch):

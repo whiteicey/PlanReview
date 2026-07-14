@@ -12,11 +12,14 @@ import sys
 
 import keyring
 
+if sys.platform == "win32":
+    from keyring.backends.Windows import WinVaultKeyring
+else:  # pragma: no cover - platform guard for non-Windows imports
+    WinVaultKeyring = None
+
 
 _PROVIDER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _DEFAULT_SERVICE = "review-assistant"
-_WINDOWS_BACKEND_MODULE = "keyring.backends.windows"
-_WINDOWS_BACKEND_CLASS = "winvaultkeyring"
 
 
 class CredentialStoreError(RuntimeError):
@@ -62,14 +65,11 @@ class CredentialStore:
             )
         try:
             backend = keyring.get_keyring()
-            backend_type = type(backend)
-            module = backend_type.__module__.casefold()
-            class_name = backend_type.__name__.casefold()
         except Exception:
             raise CredentialStoreError(
                 f"Windows Credential Manager unavailable for provider {provider!r}"
             ) from None
-        if module != _WINDOWS_BACKEND_MODULE or class_name != _WINDOWS_BACKEND_CLASS:
+        if type(backend) is not WinVaultKeyring:
             raise CredentialStoreError(
                 f"Windows Credential Manager required for provider {provider!r}"
             )
