@@ -39,11 +39,32 @@ def _normalized_host(host: str) -> str:
 
 
 def _is_public_ip_literal(host: str) -> bool:
-    """Return whether an IP literal is globally routable, if ``host`` is one."""
+    """Return whether an IP literal is globally routable, if ``host`` is one.
+
+    ``is_global`` alone is insufficient here: Python classifies multicast as
+    global, and an IPv4-mapped IPv6 address exposes the relevant classification
+    on its mapped IPv4 value. Reject every non-routable classification
+    explicitly before applying the final global check.
+    """
     try:
-        return ip_address(host).is_global
+        address = ip_address(host)
     except ValueError:
         return True
+
+    mapped = getattr(address, "ipv4_mapped", None)
+    classified_address = mapped or address
+    if any(
+        (
+            classified_address.is_multicast,
+            classified_address.is_private,
+            classified_address.is_reserved,
+            classified_address.is_loopback,
+            classified_address.is_link_local,
+            classified_address.is_unspecified,
+        )
+    ):
+        return False
+    return address.is_global and classified_address.is_global
 
 
 def _normalized_allowlist(allowlist: set[str]) -> set[str]:

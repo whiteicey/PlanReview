@@ -12,7 +12,7 @@ def test_redacts_secret_keys_and_nested_values() -> None:
     )
     assert value == {
         "api_key": "[REDACTED]",
-        "body": {"authorization": "[REDACTED]", "x": 1},
+        "body": "[REDACTED]",
     }
 
 
@@ -31,15 +31,19 @@ def test_redacts_sensitive_keys_in_nested_mappings_and_sequences() -> None:
     }
 
 
-def test_redacts_full_body_regardless_of_key_casing_or_nesting() -> None:
+def test_redacts_body_and_content_whole_values_case_insensitively() -> None:
     request_body = {"document": "confidential source text", "nested": [1, 2, 3]}
     value = redact_log_payload(
-        {"full_request": request_body, "response_body": "do not log", "summary": "safe"}
+        {
+            "BODY": request_body,
+            "nested": [{"Content": {"secret": "also hidden"}}],
+            "response_body": "do not log",
+        }
     )
     assert value == {
-        "full_request": "[REDACTED]",
+        "BODY": "[REDACTED]",
+        "nested": [{"Content": "[REDACTED]"}],
         "response_body": "[REDACTED]",
-        "summary": "safe",
     }
     assert request_body["document"] not in repr(value)
 

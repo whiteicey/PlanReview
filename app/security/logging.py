@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
 
 
 _REDACTED = "[REDACTED]"
 _SENSITIVE_KEY_PARTS = ("key", "token", "secret", "password", "authorization")
-_FULL_BODY_KEY_PARTS = ("payload", "request", "response")
+_FULL_BODY_KEY_PARTS = ("body", "content", "payload", "request", "response")
 
 
 def _key_requires_redaction(key: object) -> bool:
