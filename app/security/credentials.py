@@ -22,6 +22,11 @@ _PROVIDER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _DEFAULT_SERVICE = "review-assistant"
 
 
+def _expected_backend_type() -> type:
+    """Private test seam; production always returns genuine WinVaultKeyring."""
+    return WinVaultKeyring
+
+
 class CredentialStoreError(RuntimeError):
     """A keyring operation failed without exposing credential material."""
 
@@ -29,14 +34,8 @@ class CredentialStoreError(RuntimeError):
 class CredentialStore:
     """Store provider credentials exclusively through the system keyring."""
 
-    def __init__(
-        self,
-        service: str = _DEFAULT_SERVICE,
-        *,
-        _expected_backend_type: type | None = None,
-    ) -> None:
+    def __init__(self, service: str = _DEFAULT_SERVICE) -> None:
         self.service = self._validate_service(service)
-        self._expected_backend_type = _expected_backend_type or WinVaultKeyring
 
     @staticmethod
     def _validate_service(service: str) -> str:
@@ -70,7 +69,7 @@ class CredentialStore:
             )
         try:
             backend = keyring.get_keyring()
-            if type(backend) is not self._expected_backend_type:
+            if type(backend) is not _expected_backend_type():
                 raise CredentialStoreError(
                     f"Windows Credential Manager required for provider {provider!r}"
                 )

@@ -4,6 +4,7 @@ import keyring
 import pytest
 from keyring.backends.Windows import WinVaultKeyring
 
+import app.security.credentials as credentials_module
 from app.security.credentials import CredentialStore
 
 
@@ -36,7 +37,8 @@ class FileBackend:
 def make_fake_store(monkeypatch):
     backend = FakeVaultBackend()
     monkeypatch.setattr(keyring, "get_keyring", lambda: backend)
-    return backend, CredentialStore(_expected_backend_type=FakeVaultBackend)
+    monkeypatch.setattr(credentials_module, "_expected_backend_type", lambda: FakeVaultBackend)
+    return backend, CredentialStore()
 
 
 def test_credentials_use_validated_backend_instance(monkeypatch):
@@ -52,6 +54,15 @@ def test_credentials_use_validated_backend_instance(monkeypatch):
     assert store.get_key("anthropic") is None
     assert [call[0] for call in backend.calls] == ["set", "get", "delete", "get"]
     assert top_level_calls == []
+
+
+def test_ordinary_constructor_cannot_select_unsafe_backend(monkeypatch):
+    backend = FileBackend()
+    monkeypatch.setattr(keyring, "get_keyring", lambda: backend)
+    with pytest.raises(TypeError):
+        CredentialStore("review-assistant", _expected_backend_type=FileBackend)
+    with pytest.raises(RuntimeError, match="anthropic"):
+        CredentialStore().set_key("anthropic", "secret-value")
 
 
 @pytest.mark.parametrize("backend_factory", [FileBackend, SpoofedWinVaultKeyring])
@@ -90,7 +101,8 @@ def test_validation_then_top_level_backend_swap_does_not_change_target(monkeypat
     unsafe_backend = FileBackend()
     monkeypatch.setattr(keyring, "get_keyring", lambda: validated_backend)
     monkeypatch.setattr(keyring, "set_password", lambda *args: (_ for _ in ()).throw(AssertionError("top-level used")))
-    store = CredentialStore(_expected_backend_type=FakeVaultBackend)
+    monkeypatch.setattr(credentials_module, "_expected_backend_type", lambda: FakeVaultBackend)
+    store = CredentialStore()
 
     # A top-level lookup swap cannot redirect the already validated instance.
     original_set = validated_backend.set_password
