@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from enum import Enum
-import json
 import re
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
@@ -91,10 +90,12 @@ class ReviewRepository:
         """Commit safe case metadata and relative file references."""
         if not isinstance(case, CaseRecord) or not case.case_id:
             raise ValueError("case_id is required")
-        _safe_text(case.case_id, "case_id")
+        _safe_identifier(case.case_id, "case_id")
         self._validate_case_files(case.files)
         safe_statistics = _sanitize_json(case.statistics)
         existing = self.session.get(CaseORM, case.case_id)
+        if existing is not None and self.session.get(RecycleBinORM, case.case_id) is not None:
+            raise ValueError("cannot save a recycled case without explicit restore")
         if existing is None:
             existing = CaseORM(case_id=case.case_id, statistics=safe_statistics)
             self.session.add(existing)
@@ -124,42 +125,39 @@ class ReviewRepository:
         # still rolls back database errors; this preflight prevents a validation
         # exception from leaving pending replacement rows in the Session.
         _validate_run_payload(run)
-        case = self.session.get(CaseORM, run.case_id)
-        if case is None:
-            case = CaseORM(case_id=run.case_id, statistics={})
-            self.session.add(case)
-        if self.session.get(RecycleBinORM, run.case_id) is not None:
-            raise ValueError("cannot save a recycled case without explicit restore")
-
-        record = self._active_run(run.case_id)
-        if record is None:
-            record = ReviewRunORM(
-                case=case,
-                final_status=run.final_status,
-                facts=_sanitize_json(_models_to_dict(run.facts)),
-                stage_records=_sanitize_json(_models_to_dict(run.stage_records)),
-            )
-            self.session.add(record)
-            self.session.flush()
-        else:
-            record.final_status = run.final_status
-            record.facts = _sanitize_json(_models_to_dict(run.facts))
-            record.stage_records = _sanitize_json(_models_to_dict(run.stage_records))
-            # Delete children explicitly and flush before inserting replacements.
-            # This avoids transient duplicate finding_id values on reruns.
-            self.session.query(RuleResultORM).filter(
-                RuleResultORM.review_run_id == record.id
-            ).delete(synchronize_session=False)
-            self.session.query(FindingORM).filter(
-                FindingORM.review_run_id == record.id
-            ).delete(synchronize_session=False)
-            # Bulk DELETE bypasses the identity map; detach stale child objects
-            # before adding replacements with the same unique finding_id values.
-            for child in (*record.rule_results, *record.findings):
-                self.session.expunge(child)
-            self.session.flush()
-
         try:
+            case = self.session.get(CaseORM, run.case_id)
+            if case is None:
+                case = CaseORM(case_id=run.case_id, statistics={})
+                self.session.add(case)
+            if self.session.get(RecycleBinORM, run.case_id) is not None:
+                raise ValueError("cannot save a recycled case without explicit restore")
+
+            record = self._active_run(run.case_id)
+            if record is None:
+                record = ReviewRunORM(
+                    case=case,
+                    final_status=run.final_status,
+                    facts=_sanitize_json(_facts_to_dict(run.facts)),
+                    stage_records=_sanitize_json(_models_to_dict(run.stage_records)),
+                )
+                self.session.add(record)
+                self.session.flush()
+            else:
+                record.final_status = run.final_status
+                record.facts = _sanitize_json(_facts_to_dict(run.facts))
+                record.stage_records = _sanitize_json(_models_to_dict(run.stage_records))
+                # Delete children explicitly and flush before inserting replacements.
+                self.session.query(RuleResultORM).filter(
+                    RuleResultORM.review_run_id == record.id
+                ).delete(synchronize_session=False)
+                self.session.query(FindingORM).filter(
+                    FindingORM.review_run_id == record.id
+                ).delete(synchronize_session=False)
+                for child in (*record.rule_results, *record.findings):
+                    self.session.expunge(child)
+                self.session.flush()
+
             self.session.add_all(
                 [
                     _rule_result_row(item, position, record.id)
@@ -195,7 +193,7 @@ class ReviewRepository:
             return None
         return ReviewRun(
             case_id=record.case_id,
-            facts=[ParameterFact.model_validate(item) for item in record.facts],
+            facts=[_fact_from_row(item) for item in record.facts],
             rule_results=[_to_rule_result(item) for item in sorted(record.rule_results, key=lambda row: row.position)],
             findings=[_to_finding(item) for item in sorted(record.findings, key=lambda row: row.position)],
             stage_records=[StageRecord.model_validate(item) for item in record.stage_records],
@@ -203,16 +201,22 @@ class ReviewRepository:
         )
 
     def update_finding_review(
-        self, finding_id: str, status: ReviewStatus, note: str | None
+        self, case_id: str, finding_id: str, status: ReviewStatus, note: str | None
     ) -> None:
         """Persist a human-review decision; records cannot be updated from the bin."""
+        _safe_identifier(case_id, "case_id")
+        _safe_identifier(finding_id, "finding_id")
         if not isinstance(status, ReviewStatus):
             status = ReviewStatus(status)
         finding = self.session.scalar(
             select(FindingORM)
             .join(ReviewRunORM)
             .outerjoin(RecycleBinORM, RecycleBinORM.case_id == ReviewRunORM.case_id)
-            .where(FindingORM.finding_id == finding_id, RecycleBinORM.case_id.is_(None))
+            .where(
+                FindingORM.finding_id == finding_id,
+                ReviewRunORM.case_id == case_id,
+                RecycleBinORM.case_id.is_(None),
+            )
         )
         if finding is None:
             raise KeyError(f"finding not found: {finding_id}")
@@ -285,7 +289,7 @@ class ReviewRepository:
 
 
 def _validate_run_payload(run: ReviewRun) -> None:
-    _sanitize_json(_models_to_dict(run.facts))
+    _sanitize_json(_facts_to_dict(run.facts))
     _sanitize_json(_models_to_dict(run.stage_records))
     for result in run.rule_results:
         _rule_result_row(result, 0, 0)
@@ -331,6 +335,10 @@ def _finding_row(finding: Finding, position: int, review_run_id: int) -> Finding
     )
 
 
+def _fact_from_row(row: dict[str, Any]) -> ParameterFact:
+    return ParameterFact.model_validate(row)
+
+
 def _to_rule_result(row: RuleResultORM) -> RuleResult:
     return RuleResult(
         rule_id=row.rule_id,
@@ -363,6 +371,31 @@ def _to_finding(row: FindingORM) -> Finding:
         human_note=row.human_note,
         original_ai_snapshot=dict(row.ai_snapshot),
     )
+
+
+def _facts_to_dict(values: list[ParameterFact]) -> list[dict[str, Any]]:
+    return [
+        {
+            "fact_id": _safe_identifier(value.fact_id, "fact_id"),
+            "canonical_name": _safe_identifier(value.canonical_name, "canonical_name"),
+            "raw_name": _safe_text(value.raw_name, "raw_name"),
+            "raw_value": _safe_text(value.raw_value, "raw_value"),
+            "normalized_value": value.normalized_value,
+            "raw_unit": _safe_identifier(value.raw_unit, "raw_unit", optional=True),
+            "canonical_unit": _safe_identifier(value.canonical_unit, "canonical_unit", optional=True),
+            "subject": _safe_identifier(value.subject, "subject", optional=True),
+            "time_scope": _safe_identifier(value.time_scope, "time_scope", optional=True),
+            "statistical_scope": _safe_identifier(value.statistical_scope, "statistical_scope", optional=True),
+            "condition": _safe_identifier(value.condition, "condition", optional=True),
+            "source_document": _safe_identifier(value.source_document, "source_document"),
+            "source_version": _safe_identifier(value.source_version, "source_version", optional=True),
+            "source_span_id": _safe_identifier(value.source_span_id, "source_span_id"),
+            "extraction_method": value.extraction_method.value,
+            "confidence": value.confidence,
+            "human_status": value.human_status.value,
+        }
+        for value in values
+    ]
 
 
 def _models_to_dict(values: list[Any]) -> list[dict[str, Any]]:
@@ -461,7 +494,7 @@ def _contains_prohibited_content(value: str) -> bool:
         return True
     if re.search(r"-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----", value):
         return True
-    if re.fullmatch(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", value.strip()):
+    if re.search(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", value):
         return True
     if re.search(r"(?i)\b(?:api[_-]?key|token|secret|password)\s*[:=]\s*\S+", value):
         return True

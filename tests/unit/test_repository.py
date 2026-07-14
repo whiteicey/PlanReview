@@ -53,7 +53,7 @@ def test_round_trip_run_and_human_review(tmp_path):
     assert loaded.rule_results[0].rule_id == "R1"
     assert loaded.findings[0].finding_id == "F1"
 
-    repo.update_finding_review("F1", ReviewStatus.CONFIRMED, "专家确认")
+    repo.update_finding_review("CASE-1", "F1", ReviewStatus.CONFIRMED, "专家确认")
     reviewed = ReviewRepository(create_session(db)).get_run("CASE-1")
     assert reviewed is not None
     assert reviewed.findings[0].review_status is ReviewStatus.CONFIRMED
@@ -125,6 +125,8 @@ def test_case_metadata_only_stores_relative_file_paths_and_recycle_bin(tmp_path)
     assert repo.save_case(case) == "CASE-2"
     repo.save_run(ReviewRun("CASE-2"))
     repo.delete_case_to_recycle_bin("CASE-2")
+    with pytest.raises(ValueError, match="recycled"):
+        repo.save_case(case)
 
     restarted = ReviewRepository(create_session(db))
     assert restarted.get_run("CASE-2") is None
@@ -178,7 +180,17 @@ def test_human_note_rejects_secret_tokens_bodies_and_document_content(tmp_path):
     ]
     for note in forbidden_notes:
         with pytest.raises(ValueError, match="forbidden"):
-            repo.update_finding_review("F-note", ReviewStatus.CONFIRMED, note)
+            repo.update_finding_review("CASE-note", "F-note", ReviewStatus.CONFIRMED, note)
+
+
+def test_update_finding_review_requires_case_scope(tmp_path):
+    repo = ReviewRepository(create_session(tmp_path / "review.db"))
+    repo.save_run(ReviewRun("CASE-scope", findings=[Finding(
+        finding_id="local", origin=Origin.RULE, category="c", severity=Severity.LOW,
+        title="t", evidence_span_ids=[], needs_human_review=True,
+    )]))
+    with pytest.raises(KeyError):
+        repo.update_finding_review("CASE-wrong", "local", ReviewStatus.CONFIRMED, "safe")
 
 
 def test_save_run_validation_failure_does_not_replace_existing_run(tmp_path):

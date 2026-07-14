@@ -18,6 +18,10 @@ PROHIBITED_VALUES = (
     "authorization: Bearer abcdefghijklmnop",
     "AKIAIOSFODNN7EXAMPLE",
     "ghp_abcdefghijklmnopqrstuvwxyz",
+    "github_pat_abcdefghijklmnopqrstuvwxyz",
+    "AIzaSyAbcdefghijklmnopqrstuvwxyz012345",
+    "embedded eyJhbGciOiJIUzI1NiJ9.abc.def payload",
+    "-----BEGIN PRIVATE KEY-----",
     'request body: {"messages": ["full body"]}',
     "document content: 原始 DOCX 全文",
 )
@@ -62,7 +66,7 @@ def test_prohibited_values_rejected_in_every_persisted_prose_field(tmp_path, pro
         title="safe", evidence_span_ids=[], needs_human_review=True,
     )]))
     with pytest.raises(ValueError, match="forbidden"):
-        repo.update_finding_review("F-note", ReviewStatus.CONFIRMED, prohibited)
+        repo.update_finding_review("CASE-note", "F-note", ReviewStatus.CONFIRMED, prohibited)
 
 
 def test_prohibited_values_are_not_retained_in_safe_case_metadata(tmp_path):
