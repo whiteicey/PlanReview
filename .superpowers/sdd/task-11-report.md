@@ -42,6 +42,33 @@ python -m pytest -q
 - Applies `RuleDefinition` defaults and retains an explicitly configured `source_type`.
 - Registry isolates stored and returned definitions with deep Pydantic copies.
 
+## Review-fix update
+
+Review fixes are complete. Changed files:
+
+- `app/rules/loader.py`
+- `tests/unit/test_rule_loader.py`
+- `tests/unit/test_rule_registry.py`
+- `.superpowers/sdd/task-11-report.md`
+
+The loader now rejects every rule `source_type` other than `DEMO_ONLY`, recursively rejects non-string YAML mapping keys as `RuleLoadError`, and tests the contradictory source-type case. Registry coverage now verifies nested `params` input/output defensive copies.
+
+Fix commit: `ee45a38 fix: tighten Task 11 YAML validation`.
+
+Exact targeted test output:
+
+```text
+python -m pytest tests/unit/test_rule_loader.py tests/unit/test_rule_registry.py -v
+======================== 20 passed, 1 warning in 0.24s ========================
+```
+
+Exact full-suite output:
+
+```text
+python -m pytest -q
+82 passed, 1 warning in 1.22s
+```
+
 ## Concerns
 
 - The operator whitelist is declared locally until the operator module is introduced by the next task; it matches the specified operator names.
