@@ -17,7 +17,7 @@ Completed. Implemented Excel, Word, and strict anonymous finding exports with th
 - `481851d feat: export findings with disclaimer and anonymous package guard`
 - `5381898 fix: migrate export metadata columns`
 - `08c239f fix: fail closed on anonymous finding prose`
-- Pending follow-up: opaque taxonomy hardening
+- `314ef14 fix: make anonymous taxonomy values opaque`
 
 ## Exact tests/output
 
