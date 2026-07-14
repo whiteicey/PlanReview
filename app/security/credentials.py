@@ -8,12 +8,15 @@ Windows Credential Manager backend when configured by the environment.
 from __future__ import annotations
 
 import re
+import sys
 
 import keyring
 
 
 _PROVIDER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _DEFAULT_SERVICE = "review-assistant"
+_WINDOWS_BACKEND_MODULE = "keyring.backends.windows"
+_WINDOWS_BACKEND_CLASS = "winvaultkeyring"
 
 
 class CredentialStoreError(RuntimeError):
@@ -50,18 +53,41 @@ class CredentialStore:
     def _operation_error(provider: str) -> CredentialStoreError:
         return CredentialStoreError(f"keyring operation failed for provider {provider!r}")
 
+    @staticmethod
+    def _ensure_windows_credential_manager(provider: str) -> None:
+        """Fail closed unless the active backend is Windows Credential Manager."""
+        if sys.platform != "win32":
+            raise CredentialStoreError(
+                f"Windows Credential Manager required for provider {provider!r}"
+            )
+        try:
+            backend = keyring.get_keyring()
+            backend_type = type(backend)
+            module = backend_type.__module__.casefold()
+            class_name = backend_type.__name__.casefold()
+        except Exception:
+            raise CredentialStoreError(
+                f"Windows Credential Manager unavailable for provider {provider!r}"
+            ) from None
+        if module != _WINDOWS_BACKEND_MODULE or class_name != _WINDOWS_BACKEND_CLASS:
+            raise CredentialStoreError(
+                f"Windows Credential Manager required for provider {provider!r}"
+            )
+
     def set_key(self, provider: str, key: str) -> None:
         """Store ``key`` under the validated provider username in keyring."""
         provider = self._validate_provider(provider)
         key = self._validate_key(provider, key)
+        self._ensure_windows_credential_manager(provider)
         try:
             keyring.set_password(self.service, provider, key)
-        except Exception as error:
+        except Exception:
             raise self._operation_error(provider) from None
 
     def get_key(self, provider: str) -> str | None:
         """Retrieve a provider key, or ``None`` when no key is registered."""
         provider = self._validate_provider(provider)
+        self._ensure_windows_credential_manager(provider)
         try:
             value = keyring.get_password(self.service, provider)
         except Exception:
@@ -73,6 +99,7 @@ class CredentialStore:
     def delete_key(self, provider: str) -> None:
         """Delete a provider key; deleting an absent key is a no-op."""
         provider = self._validate_provider(provider)
+        self._ensure_windows_credential_manager(provider)
         try:
             keyring.delete_password(self.service, provider)
         except keyring.errors.PasswordDeleteError:
