@@ -15,6 +15,7 @@ uvicorn app.main:app --host 127.0.0.1 --port 8765
 ## Commits
 
 - `34b11b1 feat: add local FastAPI review workflow`
+- Pending review-fix commit.
 
 ## Tests and output
 
@@ -25,18 +26,25 @@ python -m pytest tests/contract/test_api.py tests/contract/test_api_acceptance_p
 1 collection error: ModuleNotFoundError: No module named 'app.main'
 ```
 
-Focused API contract verification:
+Focused API contract verification before review fixes:
 
 ```text
 python -m pytest tests/contract/test_api.py tests/contract/test_api_acceptance_path.py tests/security/test_api_local_only.py -v
 11 passed, 4 warnings in 1.99s
 ```
 
-Full regression verification:
+Focused API/security verification after review fixes:
+
+```text
+python -m pytest tests/contract/test_api.py tests/contract/test_api_acceptance_path.py tests/security/test_api_local_only.py -q
+13 passed, 1 warning in 2.19s
+```
+
+Full regression verification after review fixes:
 
 ```text
 python -m pytest -q
-235 passed, 4 warnings in 6.75s
+237 passed, 1 warning in 7.29s
 ```
 
 Whitespace verification:
@@ -46,7 +54,9 @@ git diff --check
 exit code 0
 ```
 
-The four warnings are pre-existing Pytest configuration and FastAPI/Starlette deprecated HTTP status aliases; no test failed.
+The remaining warning is the pre-existing `PytestConfigWarning: Unknown config option: asyncio_mode`; no test failed. Deprecated FastAPI status aliases were replaced.
+
+Review fixes include opaque evidence IDs in anonymous exports, exact-confirmation deletion of case-scoped documents and report artifacts, chunked upload enforcement, real multipart over-limit coverage, DOCX ZIP/package validation at upload, and clear 415 responses for renamed PDFs/non-DOCX packages.
 
 ## Concerns
 
