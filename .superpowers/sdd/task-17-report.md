@@ -2,9 +2,9 @@
 
 ## Status
 
-Completed. Added real SQLAlchemy 2.x SQLite ORM persistence for `cases`, `case_files`, `review_runs`, `rule_results`, `findings`, and `recycle_bin`. Repository writes commit and refresh; fresh sessions hydrate facts, rule results, findings, stages, and final status directly from SQLite. Case metadata accepts only SHA-256 file metadata, bounded case/file identifiers, and normalized POSIX-relative storage paths. Findings support case-scoped expert-review updates. Cases move to a database-backed recycle bin; `save_case` and `save_run` reject recycled cases and no implicit restore exists.
+Completed. Added real SQLAlchemy 2.x SQLite ORM persistence for `cases`, `case_files`, `review_runs`, `rule_results`, `findings`, and `recycle_bin`. Repository writes commit and refresh; fresh sessions hydrate facts, rule results, findings, stages, and final status directly from SQLite. Field-aware facts preserve safe `source_document` and validate fact/span identifiers during serialization and fresh-session hydration. Case metadata accepts only SHA-256 file metadata, bounded case/file identifiers, `.docx`-safe basename names, and normalized POSIX-relative storage paths. Findings support case-scoped expert-review updates. Cases move to a database-backed recycle bin; `save_case` and `save_run` reject recycled cases and no implicit restore exists.
 
-Final safety and transaction hardening validates every persisted identifier/list field (`finding_id`, category, parameter, rule ID, evidence IDs, fact IDs, `source_document`, and `source_span_id`) against bounded safe identifiers. Content checks cover API keys, generic tokens, authorization/Bearer values, AWS keys, GitHub tokens including `github_pat`, Google `AIza` keys, embedded JWTs, PEM private keys, request/response payload markers, raw document markers, and bounded JSON/prose. `save_run` preflights the entire payload and places all ORM mutation, flush, and commit operations inside one rollback guard, preventing partial replacement rows. Finding IDs are unique per review run, allowing the same local ID in separate cases. `update_finding_review` requires `case_id` plus `finding_id`, removing ambiguous local-ID updates.
+All mutating repository methods now use rollback guards around ORM mutation, flush, and commit: `save_case`, `save_run`, `update_finding_review`, recycle-bin deletion, and permanent deletion. Reuse-after-failure coverage confirms sessions remain usable. Content checks cover API keys, generic tokens, authorization/Bearer values, AWS keys, GitHub tokens including `github_pat`, Google `AIza` keys, embedded JWTs, PEM private keys, request/response payload markers, raw document markers, and bounded JSON/prose.
 
 ## Commits
 
@@ -27,14 +27,14 @@ Final review focused verification:
 
 ```text
 python -m pytest tests/unit/test_repository.py tests/security/test_no_secrets_in_persistence.py -q
-32 passed, 1 warning in 4.35s
+32 passed, 1 warning in 4.38s
 ```
 
 Final full regression verification:
 
 ```text
 python -m pytest -q
-181 passed, 1 warning in 5.04s
+181 passed, 1 warning in 5.14s
 ```
 
 The remaining warning is the existing `PytestConfigWarning: Unknown config option: asyncio_mode`.
@@ -43,7 +43,6 @@ The remaining warning is the existing `PytestConfigWarning: Unknown config optio
 
 - `app/persistence/repository.py`
 - `tests/unit/test_repository.py`
-- `tests/security/test_no_secrets_in_persistence.py`
 - `.superpowers/sdd/task-17-report.md`
 
 ## Concerns
