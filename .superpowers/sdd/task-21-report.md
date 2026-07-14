@@ -15,7 +15,7 @@ Completed. Implemented Excel, Word, and strict anonymous finding exports with th
 ## Commits
 
 - `481851d feat: export findings with disclaimer and anonymous package guard`
-- Pending follow-up commit: legacy SQLite additive migration verification
+- `5381898 fix: migrate export metadata columns`
 
 ## Exact tests/output
 
