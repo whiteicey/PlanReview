@@ -65,9 +65,7 @@ def test_canonical_match_takes_precedence_over_aliases():
     assert terms.canonicalize("井数") == "部署井数"
 
 
-def test_terminology_mapping_and_alias_sets_reject_mutation():
-    terms = TerminologyMap.from_mapping({"开发井总数": ["部署井数"]})
-
+def assert_terminology_is_immutable(terms: TerminologyMap):
     try:
         terms.canonical_to_aliases["新术语"] = frozenset({"新术语"})
     except TypeError:
@@ -82,3 +80,19 @@ def test_terminology_mapping_and_alias_sets_reject_mutation():
         pass
     else:
         raise AssertionError("alias set must reject mutation")
+
+
+def test_terminology_mapping_and_alias_sets_reject_mutation():
+    assert_terminology_is_immutable(
+        TerminologyMap.from_mapping({"开发井总数": ["部署井数"]})
+    )
+
+
+def test_direct_constructor_freezes_mutable_mapping_and_aliases():
+    mapping = {"开发井总数": ["部署井数"]}
+    terms = TerminologyMap(mapping)
+    mapping["新术语"] = ["新别名"]
+
+    assert terms.canonicalize("部署井数") == "开发井总数"
+    assert "新术语" not in terms.canonical_to_aliases
+    assert_terminology_is_immutable(terms)

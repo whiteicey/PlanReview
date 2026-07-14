@@ -17,23 +17,31 @@ class TerminologyMap:
 
     canonical_to_aliases: Mapping[str, frozenset[str]]
 
+    def __post_init__(self) -> None:
+        """Normalize and freeze mappings supplied through any constructor."""
+        normalized = {
+            str(canonical).strip(): frozenset(
+                {
+                    str(canonical).strip(),
+                    *(str(alias).strip() for alias in aliases),
+                }
+            )
+            for canonical, aliases in self.canonical_to_aliases.items()
+        }
+        object.__setattr__(self, "canonical_to_aliases", MappingProxyType(normalized))
+
     @classmethod
     def from_mapping(cls, mapping: dict[str, list[str]]) -> TerminologyMap:
         """Build a terminology map with trimmed canonical names and aliases."""
-        normalized = {
-            canonical.strip(): frozenset(
-                {canonical.strip(), *(alias.strip() for alias in aliases)}
-            )
-            for canonical, aliases in mapping.items()
-        }
-        return cls(MappingProxyType(normalized))
+        return cls(mapping)
 
     def canonicalize(self, raw_name: str) -> str:
-        """Return the mapped canonical name, or the trimmed unknown name.
+        """Return a mapped canonical name or the original unknown name.
 
         Canonical names win over aliases, including when a string appears as
-        both a canonical name and an alias in the supplied mapping.  Alias
-        matching is exact after stripping surrounding whitespace only.
+        both a canonical name and an alias in the supplied mapping. Alias
+        matching is exact after stripping surrounding whitespace only; an
+        unknown term is returned with its original whitespace preserved.
         """
         if raw_name in self.canonical_to_aliases:
             return raw_name

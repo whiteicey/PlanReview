@@ -63,3 +63,35 @@ Full-suite regression run:
 python -m pytest -q
 47 passed, 1 warning in 0.79s
 ```
+
+## Direct-constructor review fix
+
+### Direct-constructor status
+
+Fixed direct `TerminologyMap(...)` construction by adding `__post_init__` normalization and freezing. Mutable input mappings are copied into a `MappingProxyType`, and all alias collections are copied to `frozenset`. Updated the `canonicalize` docstring to state that unmatched terms preserve their original whitespace. Added a direct-constructor mutation regression test.
+
+### Changed files
+
+- `app/extraction/terminology.py`
+- `tests/unit/test_terminology.py`
+- `.superpowers/sdd/task-9-report.md`
+
+### Exact verification output
+
+Focused regression run:
+
+```text
+python -m pytest tests/unit/test_terminology.py -v
+7 passed, 1 warning in 0.12s
+```
+
+Full-suite regression run:
+
+```text
+python -m pytest -q
+48 passed, 1 warning in 0.82s
+```
+
+### Concerns
+
+The existing pytest warning `Unknown config option: asyncio_mode` remains unchanged. Direct construction accepts mapping-like values whose canonical and alias entries are converted to strings and stripped for matching; unmatched input names are still returned exactly as supplied to `canonicalize`.
