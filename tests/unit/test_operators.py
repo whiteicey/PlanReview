@@ -39,6 +39,7 @@ def fact(
     raw_name: str | None = None,
     span_id: str = "s1",
     canonical_name: str | None = None,
+    source_version: str | None = None,
 ) -> ParameterFact:
     return ParameterFact(
         fact_id=fid,
@@ -51,6 +52,7 @@ def fact(
         statistical_scope=statistical_scope,
         condition=condition,
         source_document="D",
+        source_version=source_version,
         source_span_id=span_id,
         extraction_method=ExtractionMethod.TABLE,
     )
@@ -117,7 +119,13 @@ def test_all_equal_has_pass_fail_unknown_and_never_compares_different_scopes() -
     assert passed.evidence_span_ids == ["a", "b"]
     assert run("all_equal", [matching[0], fact("b", "开发井总数", 38, span_id="b")], params=params).status is RuleStatus.FAIL
     assert run("all_equal", [matching[0], fact("b", "开发井总数", 38, time_scope="达产期")], params=params).status is RuleStatus.UNKNOWN
+    assert run("all_equal", [matching[0], fact("b", "开发井总数", 38, statistical_scope="日峰值")], params=params).status is RuleStatus.UNKNOWN
+    assert run("all_equal", [matching[0], fact("b", "开发井总数", 38, subject="单区")], params=params).status is RuleStatus.UNKNOWN
+    assert run("all_equal", [matching[0], fact("b", "开发井总数", 38, condition="峰值")], params=params).status is RuleStatus.UNKNOWN
     assert run("all_equal", [fact("a", "开发井总数", 36, time_scope=None), matching[1]], params=params).status is RuleStatus.UNKNOWN
+    assert run("all_equal", matching, params={"parameter": "开发井总数", "match_dimensions": ["subject", "time_scope"]}).status is RuleStatus.PASS
+    assert run("all_equal", [matching[0], fact("b", "开发井总数", 36, condition="峰值")], params={"parameter": "开发井总数", "match_dimensions": ["subject", "time_scope"]}).status is RuleStatus.PASS
+    assert run("all_equal", matching, params={"parameter": "开发井总数", "match_dimensions": ["subject", "bogus"]}).status is RuleStatus.UNKNOWN
 
 
 def test_sum_equals_has_pass_fail_unknown_and_requires_one_shared_full_key() -> None:
@@ -150,23 +158,31 @@ def test_less_or_equal_has_pass_fail_unknown_and_scope_matching() -> None:
 def test_change_requires_reason_has_pass_fail_unknown_and_scope_matching() -> None:
     params = {"parameter": "建设周期", "reason_terms": ["原因"]}
     old, new = fact("old", "建设周期", 24, span_id="old"), fact("new", "建设周期", 30, span_id="new")
+    assert run("change_requires_reason", [old, new], params=params).status is RuleStatus.UNKNOWN
+    old = fact("old", "建设周期", 24, span_id="old", source_version="v1")
+    new = fact("new", "建设周期", 30, span_id="new", source_version="v2")
     assert run("change_requires_reason", [old, new], params=params).status is RuleStatus.FAIL
     outcome = run(
         "change_requires_reason",
         [old, new],
-        [span("调整原因：地面条件变化", sid="reason", section="审查意见回复表")],
+        [span("建设周期调整原因：地面条件变化", sid="reason", section="审查意见回复表")],
         params,
     )
     assert outcome.status is RuleStatus.PASS
     assert outcome.evidence_span_ids == ["old", "new", "reason"]
-    assert run("change_requires_reason", [old, fact("new", "建设周期", 30, time_scope="达产期")], params=params).status is RuleStatus.UNKNOWN
+    assert run("change_requires_reason", [old, fact("new", "建设周期", 30, time_scope="达产期", source_version="v3")], params=params).status is RuleStatus.UNKNOWN
+    assert run("change_requires_reason", [old, fact("new", "建设周期", 30, source_version="v1")], params=params).status is RuleStatus.UNKNOWN
+    assert run("change_requires_reason", [old, fact("new", "建设周期", 30, source_version="v3")], [span("建设周期无原因，调整", sid="bad", section="审查意见回复表")], params).status is RuleStatus.FAIL
+    assert run("change_requires_reason", [old, fact("new", "建设周期", 30, source_version="v3")], [span("建设周期调整原因：地面条件变化", sid="wrong", section="普通说明")], params).status is RuleStatus.FAIL
     assert run("change_requires_reason", [old], params=params).status is RuleStatus.UNKNOWN
 
 
 def test_issue_response_status_exists_has_pass_fail_unknown() -> None:
     params = {"status_terms": ["已完成", "待整改"]}
-    assert run("issue_response_status_exists", spans=[span("待整改", sid="status")], params=params).status is RuleStatus.PASS
-    assert run("issue_response_status_exists", spans=[span("没有状态")], params=params).status is RuleStatus.FAIL
+    assert run("issue_response_status_exists", spans=[span("待整改", sid="status", section="审查意见回复表")], params=params).status is RuleStatus.PASS
+    failed = run("issue_response_status_exists", spans=[span("没有状态", section="审查意见回复表")], params=params)
+    assert failed.status is RuleStatus.FAIL
+    assert failed.evidence_span_ids == ["s1"]
     assert run("issue_response_status_exists", spans=[span("待整改")]).status is RuleStatus.UNKNOWN
 
 

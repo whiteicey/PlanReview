@@ -87,18 +87,60 @@ def _usable(facts: list[ParameterFact]) -> bool:
     )
 
 
-def _dimensions(fact: ParameterFact) -> tuple[str | None, str | None, str | None, str | None]:
-    """Return every non-name comparison dimension without dropping scope."""
-    _, subject, time_scope, statistical_scope, condition = fact.comparison_key()
-    return subject, time_scope, statistical_scope, condition
+MATCH_DIMENSIONS = (
+    "canonical_name",
+    "subject",
+    "time_scope",
+    "statistical_scope",
+    "condition",
+)
+_DIMENSION_ALIASES = {"name": "canonical_name"}
+_DEFAULT_SCOPE_DIMENSIONS = (
+    "subject",
+    "time_scope",
+    "statistical_scope",
+    "condition",
+)
 
 
-def _same_dimensions(facts: list[ParameterFact]) -> bool:
-    return bool(facts) and len({_dimensions(fact) for fact in facts}) == 1
+def _matching_dimensions(
+    params: dict[str, Any], default: tuple[str, ...]
+) -> tuple[str, ...] | None:
+    """Validate the explicit match_dimensions contract.
+
+    ``canonical_name`` (also accepted as ``name``) is a real comparison
+    dimension. Cross-parameter arithmetic defaults to the four scope
+    dimensions because its operands intentionally have different names;
+    callers may explicitly include the name dimension, which then makes such
+    a comparison UNKNOWN rather than silently ignoring it.
+    """
+    configured = params.get("match_dimensions", default)
+    if not isinstance(configured, (list, tuple)) or not configured:
+        return None
+    normalized = tuple(_DIMENSION_ALIASES.get(value, value) for value in configured)
+    if len(set(normalized)) != len(normalized) or any(
+        value not in MATCH_DIMENSIONS for value in normalized
+    ):
+        return None
+    return normalized
+
+
+def _dimension_value(fact: ParameterFact, dimension: str) -> str | None:
+    return dict(zip(MATCH_DIMENSIONS, fact.comparison_key()))[dimension]
+
+
+def _same_dimensions(
+    facts: list[ParameterFact], dimensions: tuple[str, ...]
+) -> bool:
+    return bool(facts) and len(
+        {tuple(_dimension_value(fact, dimension) for dimension in dimensions) for fact in facts}
+    ) == 1
 
 
 def _single_matching_facts(
-    context: OperatorContext, names: list[str]
+    context: OperatorContext,
+    names: list[str],
+    dimensions: tuple[str, ...],
 ) -> tuple[list[ParameterFact] | None, list[ParameterFact]]:
     """Select exactly one fact per name only when every scope dimension matches.
 
@@ -115,7 +157,7 @@ def _single_matching_facts(
     if any(len(group) != 1 for group in groups):
         return None, gathered
     selected = [group[0] for group in groups]
-    return (selected if _same_dimensions(selected) else None), gathered
+    return (selected if _same_dimensions(selected, dimensions) else None), gathered
 
 
 def required_sections_exist(context: OperatorContext, params: dict[str, Any]) -> OperatorOutcome:
@@ -145,22 +187,19 @@ def required_parameter_table_exists(
     needle = params.get("section_contains")
     if not isinstance(needle, str) or not needle:
         return _unknown("缺少参数表章节配置", spans=context.spans)
-    cells = [
-        span
-        for span in context.spans
-        if span.block_type is BlockType.TABLE_CELL
-        and any(needle in section for section in span.section_path)
-    ]
+    relevant = [span for span in context.spans if any(needle in section for section in span.section_path)]
+    cells = [span for span in relevant if span.block_type is BlockType.TABLE_CELL]
     return _outcome(
         RuleStatus.PASS if cells else RuleStatus.FAIL,
         "参数表存在" if cells else "缺少参数表",
-        spans=cells,
+        spans=cells or relevant,
     )
 
 
 def all_equal(context: OperatorContext, params: dict[str, Any]) -> OperatorOutcome:
+    dimensions = _matching_dimensions(params, MATCH_DIMENSIONS)
     facts = _named_facts(context, params.get("parameter"))
-    if not _usable(facts) or not _same_dimensions(facts):
+    if dimensions is None or not _usable(facts) or not _same_dimensions(facts, dimensions):
         return _unknown("缺少完整且可比较的事实", facts)
     values = {fact.normalized_value for fact in facts}
     return _outcome(
@@ -181,7 +220,10 @@ def sum_equals(context: OperatorContext, params: dict[str, Any]) -> OperatorOutc
         or not all(isinstance(component, str) and component for component in components)
     ):
         return _unknown("缺少有效求和配置")
-    selected, gathered = _single_matching_facts(context, [target, *components])
+    dimensions = _matching_dimensions(params, _DEFAULT_SCOPE_DIMENSIONS)
+    if dimensions is None:
+        return _unknown("比较维度配置无效")
+    selected, gathered = _single_matching_facts(context, [target, *components], dimensions)
     if selected is None:
         return _unknown("缺少完整、唯一且同范围的求和事实", gathered)
     target_fact, *component_facts = selected
@@ -217,7 +259,10 @@ def product_approximately_equals(
     if not math.isfinite(relative_tolerance) or relative_tolerance < 0:
         return _unknown("相对容差无效")
 
-    selected, gathered = _single_matching_facts(context, [*left, right])
+    dimensions = _matching_dimensions(params, _DEFAULT_SCOPE_DIMENSIONS)
+    if dimensions is None:
+        return _unknown("比较维度配置无效")
+    selected, gathered = _single_matching_facts(context, [*left, right], dimensions)
     if selected is None:
         return _unknown("缺少完整、唯一且同范围的乘积事实", gathered)
     *left_facts, right_fact = selected
@@ -242,7 +287,10 @@ def less_or_equal(context: OperatorContext, params: dict[str, Any]) -> OperatorO
     right = params.get("right")
     if not isinstance(left, str) or not left or not isinstance(right, str) or not right:
         return _unknown("缺少有效容量比较配置")
-    selected, gathered = _single_matching_facts(context, [left, right])
+    dimensions = _matching_dimensions(params, _DEFAULT_SCOPE_DIMENSIONS)
+    if dimensions is None:
+        return _unknown("比较维度配置无效")
+    selected, gathered = _single_matching_facts(context, [left, right], dimensions)
     if selected is None:
         return _unknown("缺少完整、唯一且同范围的容量比较事实", gathered)
     left_fact, right_fact = selected
@@ -265,20 +313,36 @@ def change_requires_reason(context: OperatorContext, params: dict[str, Any]) -> 
         or not all(isinstance(term, str) and term for term in terms)
     ):
         return _unknown("缺少有效变更原因配置")
+    dimensions = _matching_dimensions(params, _DEFAULT_SCOPE_DIMENSIONS)
+    if dimensions is None:
+        return _unknown("比较维度配置无效")
     facts = _named_facts(context, parameter)
-    if len(facts) < 2 or not _usable(facts) or not _same_dimensions(facts):
+    if len(facts) < 2 or not _usable(facts) or not _same_dimensions(facts, dimensions):
         return _unknown("缺少完整且同范围的版本事实", facts)
+    versions = {fact.source_version for fact in facts}
+    if None in versions or len(versions) != len(facts):
+        return _unknown("缺少明确且不同的版本配对", facts)
     changed = len({fact.normalized_value for fact in facts}) > 1
-    reasons = [
-        span for span in context.spans if any(term in span.text for term in terms)
-    ]
     if not changed:
         return _outcome(RuleStatus.PASS, "参数未变更", facts)
+    response_sections = params.get("reason_sections", ["审查意见回复表"])
+    if not isinstance(response_sections, list) or not response_sections or not all(
+        isinstance(section, str) and section for section in response_sections
+    ):
+        return _unknown("原因响应章节配置无效", facts)
+    relevant_spans = [
+        span
+        for span in context.spans
+        if any(section in path for section in response_sections for path in span.section_path)
+        and parameter in span.text
+        and not any(negative in span.text for negative in ("无原因", "无理由", "没有原因"))
+        and any(term in span.text for term in terms)
+    ]
     return _outcome(
-        RuleStatus.PASS if reasons else RuleStatus.FAIL,
-        "变更有原因" if reasons else "变更缺少原因",
+        RuleStatus.PASS if relevant_spans else RuleStatus.FAIL,
+        "变更有原因" if relevant_spans else "变更缺少原因",
         facts,
-        reasons,
+        relevant_spans,
     )
 
 
@@ -290,11 +354,16 @@ def issue_response_status_exists(
         isinstance(term, str) and term for term in terms
     ):
         return _unknown("缺少有效意见状态配置", spans=context.spans)
-    matches = [span for span in context.spans if any(term in span.text for term in terms)]
+    relevant = [
+        span
+        for span in context.spans
+        if any("审查意见回复表" in section for section in span.section_path)
+    ]
+    matches = [span for span in relevant if any(term in span.text for term in terms)]
     return _outcome(
         RuleStatus.PASS if matches else RuleStatus.FAIL,
         "意见状态存在" if matches else "意见状态缺失",
-        spans=matches,
+        spans=matches or relevant,
     )
 
 

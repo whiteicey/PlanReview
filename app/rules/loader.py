@@ -11,23 +11,7 @@ from pydantic import ValidationError
 from app.domain.exceptions import RuleLoadError
 from app.domain.schemas import RuleDefinition
 from app.extraction.terminology import TerminologyMap
-
-# This whitelist is deliberately declarative: rule YAML selects a known name but
-# never supplies executable code.  Task 12 implements these named operators.
-_OPERATOR_NAMES = frozenset(
-    {
-        "required_sections_exist",
-        "required_parameter_table_exists",
-        "all_equal",
-        "sum_equals",
-        "product_approximately_equals",
-        "less_or_equal",
-        "change_requires_reason",
-        "issue_response_status_exists",
-        "alias_normalization",
-        "evidence_required",
-    }
-)
+from app.rules.operators import OPERATOR_NAMES
 _RULE_FIELDS = frozenset(RuleDefinition.model_fields)
 
 
@@ -79,7 +63,7 @@ def _validate_rule_row(row: Any, index: int) -> RuleDefinition:
     except ValidationError as exc:
         raise RuleLoadError(f"rules[{index}] 不符合规则模式: {exc}") from exc
 
-    if rule.operator not in _OPERATOR_NAMES:
+    if rule.operator not in OPERATOR_NAMES:
         raise RuleLoadError(f"未知 operator: {rule.operator}")
     if rule.source_type != "DEMO_ONLY":
         raise RuleLoadError(f"不支持 source_type: {rule.source_type}")

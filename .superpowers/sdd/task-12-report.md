@@ -39,3 +39,36 @@ python -m pytest -q
 ## Concerns
 
 The suite emits one pre-existing pytest configuration warning: `asyncio_mode` is unknown because `pytest-asyncio` is not installed in this environment. It does not affect Task 12 tests.
+
+## Review follow-up
+
+Review findings were addressed in the working-tree follow-up commit:
+
+- `change_requires_reason` now requires distinct non-null `source_version` values, returning `UNKNOWN` for same-version contradictions or unpaired versions.
+- Reason evidence is restricted to the configured response sections, must mention the changed parameter and a configured reason term, and rejects negative phrases such as `无原因`.
+- Added the explicit `match_dimensions` contract over `canonical_name`, `subject`, `time_scope`, `statistical_scope`, and `condition`; invalid configuration is `UNKNOWN`, and adversarial scope/name cases are covered.
+- The loader now imports canonical `OPERATOR_NAMES` from the operator registry rather than maintaining a duplicate whitelist.
+- Absence-based table/status failures retain relevant section spans as evidence when available.
+
+Changed files:
+
+```text
+app/rules/operators.py
+tests/unit/test_operators.py
+app/rules/loader.py
+.superpowers/sdd/task-12-report.md
+```
+
+Focused follow-up output:
+
+```text
+python -m pytest tests/unit/test_operators.py -q
+11 passed, 1 warning in 0.14s
+```
+
+Full follow-up output:
+
+```text
+python -m pytest -q
+93 passed, 1 warning in 1.22s
+```
