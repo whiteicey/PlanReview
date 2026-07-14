@@ -81,6 +81,26 @@ def test_engine_applies_unknown_missing_policies_without_fabricating_pass() -> N
     assert all(result.status is not RuleStatus.PASS for result in (unknown, failed, blocked))
 
 
+def test_version_unknown_is_converted_to_fail_and_requires_human_review() -> None:
+    version_rule = RuleDefinition(
+        rule_id="VERSION-001",
+        version="0.1",
+        name="version reason",
+        category="version-change",
+        severity=Severity.HIGH,
+        operator="change_requires_reason",
+        on_missing=OnMissing.FAIL,
+        params={"parameter": "建设周期"},
+    )
+
+    result = RuleEngine().evaluate([version_rule], [], [])[0]
+
+    assert result.status is RuleStatus.FAIL
+    assert result.needs_human_review is True
+    assert result.message
+    assert result.details == {}
+
+
 def test_engine_marks_version_failures_for_human_review_and_skips_disabled_rules() -> None:
     version, = RuleEngine().evaluate(
         [rule("VERSION-001"), rule("DISABLED", enabled=False)], [], [span()]

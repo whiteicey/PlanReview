@@ -38,6 +38,45 @@ git diff --check
 completed cleanly
 ```
 
+## First-Principles Amendment
+
+Added reusable `StageRunner` in `app/pipeline.py` and enriched `StageRecord` with `exception_type`.
+
+- Each stage records `stage`, `started_at`, `ended_at`, `status`, `exception_type`, and sanitized `error`.
+- Any parser, provider/model, or rules-stage exception records the failed stage, appends a `FAILED` record, stops all later callbacks, and returns `final_status == "FAILED"`.
+- Successful runs return `READY_FOR_HUMAN_REVIEW`; failures can never reach that status.
+- Sanitization removes filesystem paths, credential assignments, long token-like values, and request/body payload text.
+- Added a focused `VERSION-001` test proving an operator `UNKNOWN` with `on_missing=fail` becomes `FAIL` and requires human review.
+
+Changed files in amendment:
+
+```text
+app/pipeline.py
+app/domain/schemas.py
+tests/unit/test_pipeline.py
+tests/unit/test_engine.py
+.superpowers/sdd/task-13-report.md
+```
+
+Amendment commits:
+
+```text
+<current commit after amendment>
+```
+
+Exact amendment verification output:
+
+```text
+python -m pytest tests/unit/test_pipeline.py tests/unit/test_engine.py -q
+9 passed, 1 warning in 0.15s
+
+python -m pytest -q
+106 passed, 1 warning in 1.22s
+
+git diff --check
+completed cleanly
+```
+
 ## Concerns
 
-The environment emits one existing pytest warning: `asyncio_mode` is unknown because `pytest-asyncio` is not installed. It does not affect the Task 13 suite.
+The environment emits one existing pytest warning: `asyncio_mode` is unknown because `pytest-asyncio` is not installed. It does not affect the Task 13 suite. StageRunner sanitization is intentionally conservative and truncates diagnostics to 240 characters.

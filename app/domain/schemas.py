@@ -87,6 +87,7 @@ class StageRecord(BaseModel):
     started_at: datetime
     ended_at: datetime | None = None
     status: str
+    exception_type: str | None = None
     error: str | None = None
 
 
