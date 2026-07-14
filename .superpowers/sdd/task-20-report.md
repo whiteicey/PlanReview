@@ -14,7 +14,7 @@ uvicorn app.main:app --host 127.0.0.1 --port 8765
 
 ## Commits
 
-- Pending at report creation.
+- `34b11b1 feat: add local FastAPI review workflow`
 
 ## Tests and output
 
