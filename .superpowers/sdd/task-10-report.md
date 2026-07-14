@@ -53,6 +53,26 @@ python -m pytest -q
 61 passed, 1 warning in 1.17s
 ```
 
+## Re-review fix status
+
+Implemented explicit source and canonical target Pint expressions for every unit mapping. Normalization now calls `quantity.to(target_expression)`, so a deliberately incompatible source-target mapping fails with `None` rather than merely relying on unknown raw-unit rejection. Removed the unused `well` definition and corrected the custom-unit comments.
+
+- Follow-up commit: pending (created after tests below).
+- Changed files: `app/extraction/normalization.py`, `tests/unit/test_normalization.py`, `.superpowers/sdd/task-10-report.md`
+- Added regression coverage for an injected incompatible mapping (`meter` to `second`).
+
+## Exact re-review test output
+
+```text
+python -m pytest tests/unit/test_normalization.py -v
+======================== 14 passed, 1 warning in 0.47s ========================
+```
+
+```text
+python -m pytest -q
+62 passed, 1 warning in 1.12s
+```
+
 ## Concerns
 
 - Pytest emits an existing warning that `asyncio_mode` is an unknown config option in this environment; it does not affect test results.
