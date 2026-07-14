@@ -22,6 +22,12 @@ def test_pairs_date_versions_when_no_v_marker_exists():
     ]
 
 
+def test_v_marker_precedes_dates_in_mixed_stem_deterministically():
+    assert pair_documents(
+        ["方案_2024-01-01.docx", "方案_V1.docx", "方案_V2.docx", "方案_2024-02-01.docx"]
+    ) == [("方案_V1.docx", "方案_V2.docx")]
+
+
 def test_pair_assessment_uses_explicit_weighted_score_and_thresholds():
     high = assess_pair("方案_V1.docx", "方案_V2.docx", title_or_directory_match=True)
     medium = assess_pair("方案_V1.docx", "方案_V2.docx")

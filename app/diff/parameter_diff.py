@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import TypeAlias
 
 from app.diff.pairing import PairingAssessment, assert_pairing_confirmed
@@ -26,7 +27,7 @@ def diff_parameters(
     old: list[ParameterFact],
     new: list[ParameterFact],
     *,
-    pairing: PairingAssessment | None = None,
+    pairing: PairingAssessment,
 ) -> list[ParameterDifference]:
     """Compare normalized facts without treating changed scope as add/remove.
 
@@ -38,119 +39,130 @@ def diff_parameters(
     unmatched fact with subject ``None`` is conservatively paired by name with
     a fact having a known subject instead of becoming added/removed.
     """
-    if pairing is not None:
-        assert_pairing_confirmed(pairing)
+    assert_pairing_confirmed(pairing)
 
-    old_by_base = _group_by_base_key(old)
-    new_by_base = _group_by_base_key(new)
+    old_by_name = _group_by_name(old)
+    new_by_name = _group_by_name(new)
     differences: list[ParameterDifference] = []
-    remaining_old: list[ParameterFact] = []
-    remaining_new: list[ParameterFact] = []
 
-    for base_key in sorted(old_by_base.keys() & new_by_base.keys(), key=_base_sort_key):
-        differences.extend(_diff_base_group(old_by_base[base_key], new_by_base[base_key]))
+    for name in sorted(old_by_name.keys() | new_by_name.keys()):
+        old_facts = old_by_name.get(name, [])
+        new_facts = new_by_name.get(name, [])
+        if not old_facts:
+            differences.extend(
+                ParameterDifference(fact.comparison_key(), None, fact, DiffKind.ADDED)
+                for fact in sorted(new_facts, key=_fact_sort_key)
+            )
+        elif not new_facts:
+            differences.extend(
+                ParameterDifference(fact.comparison_key(), fact, None, DiffKind.REMOVED)
+                for fact in sorted(old_facts, key=_fact_sort_key)
+            )
+        else:
+            differences.extend(_diff_name_group(old_facts, new_facts))
 
-    for base_key in old_by_base.keys() - new_by_base.keys():
-        remaining_old.extend(old_by_base[base_key])
-    for base_key in new_by_base.keys() - old_by_base.keys():
-        remaining_new.extend(new_by_base[base_key])
-
-    unknown_scope_pairs, remaining_old, remaining_new = _pair_missing_subjects(
-        remaining_old, remaining_new
-    )
-    differences.extend(unknown_scope_pairs)
-    differences.extend(
-        ParameterDifference(fact.comparison_key(), fact, None, DiffKind.REMOVED)
-        for fact in sorted(remaining_old, key=_fact_sort_key)
-    )
-    differences.extend(
-        ParameterDifference(fact.comparison_key(), None, fact, DiffKind.ADDED)
-        for fact in sorted(remaining_new, key=_fact_sort_key)
-    )
     return differences
 
 
-def _pair_missing_subjects(
+def _diff_name_group(
     old_facts: list[ParameterFact], new_facts: list[ParameterFact]
-) -> tuple[list[ParameterDifference], list[ParameterFact], list[ParameterFact]]:
-    """Pair same-name leftovers only when a subject is explicitly missing."""
-    old_by_name = _group_by_name(old_facts)
-    new_by_name = _group_by_name(new_facts)
-    differences: list[ParameterDifference] = []
-    remaining_old: list[ParameterFact] = []
-    remaining_new: list[ParameterFact] = []
+) -> list[ParameterDifference]:
+    """Compare one canonical name, refusing ambiguous cardinality or duplicates."""
+    if len(old_facts) != len(new_facts):
+        return [_ambiguous_difference(old_facts, new_facts)]
+    if _has_duplicate_full_key(old_facts) or _has_duplicate_full_key(new_facts):
+        return [_ambiguous_difference(old_facts, new_facts)]
 
-    for name in sorted(old_by_name.keys() | new_by_name.keys()):
-        unmatched_old = sorted(old_by_name.get(name, []), key=_fact_sort_key)
-        unmatched_new = sorted(new_by_name.get(name, []), key=_fact_sort_key)
-        while unmatched_old and unmatched_new:
-            old_index = next((i for i, fact in enumerate(unmatched_old) if fact.subject is None), None)
-            new_index = next((i for i, fact in enumerate(unmatched_new) if fact.subject is None), None)
-            if old_index is None and new_index is None:
-                break
-            old_fact = unmatched_old.pop(0 if old_index is None else old_index)
-            new_fact = unmatched_new.pop(0 if new_index is None else new_index)
+    old_by_base = _group_by_base_key(old_facts)
+    new_by_base = _group_by_base_key(new_facts)
+    differences: list[ParameterDifference] = []
+    common_bases = old_by_base.keys() & new_by_base.keys()
+    for base_key in sorted(common_bases, key=_base_sort_key):
+        differences.extend(_diff_base_group(old_by_base[base_key], new_by_base[base_key]))
+
+    old_left = [fact for key, facts in old_by_base.items() if key not in common_bases for fact in facts]
+    new_left = [fact for key, facts in new_by_base.items() if key not in common_bases for fact in facts]
+    if old_left or new_left:
+        if len(old_left) == len(new_left) == 1:
             differences.append(
                 ParameterDifference(
-                    _paired_key(old_fact, new_fact), old_fact, new_fact, DiffKind.UNKNOWN_SCOPE
+                    _paired_key(old_left[0], new_left[0]), old_left[0], new_left[0], DiffKind.UNKNOWN_SCOPE
                 )
             )
-        remaining_old.extend(unmatched_old)
-        remaining_new.extend(unmatched_new)
-    return differences, remaining_old, remaining_new
+        else:
+            differences.append(_ambiguous_difference(old_left, new_left))
+    return differences
+
+
+def _ambiguous_difference(
+    old_facts: list[ParameterFact], new_facts: list[ParameterFact]
+) -> ParameterDifference:
+    facts = sorted(old_facts + new_facts, key=_fact_sort_key)
+    name = facts[0].canonical_name if facts else ""
+    return ParameterDifference((name, None, None, None, None), None, None, DiffKind.UNKNOWN_SCOPE)
+
+
+def _has_duplicate_full_key(facts: list[ParameterFact]) -> bool:
+    keys = [fact.comparison_key() for fact in facts]
+    return len(keys) != len(set(keys))
 
 
 def _diff_base_group(
     old_facts: list[ParameterFact], new_facts: list[ParameterFact]
 ) -> list[ParameterDifference]:
+    if len(old_facts) != len(new_facts) or _has_duplicate_full_key(old_facts) or _has_duplicate_full_key(new_facts):
+        return [_ambiguous_difference(old_facts, new_facts)]
     old_by_full = _group_by_comparison_key(old_facts)
     new_by_full = _group_by_comparison_key(new_facts)
     differences: list[ParameterDifference] = []
-    unmatched_old: list[ParameterFact] = []
-    unmatched_new: list[ParameterFact] = []
 
-    for key in sorted(old_by_full.keys() | new_by_full.keys(), key=_comparison_sort_key):
-        old_matches = old_by_full.get(key, [])
-        new_matches = new_by_full.get(key, [])
-        common = min(len(old_matches), len(new_matches))
-        for index in range(common):
-            old_fact, new_fact = old_matches[index], new_matches[index]
-            differences.append(
-                ParameterDifference(key, old_fact, new_fact, _matched_kind(old_fact, new_fact))
-            )
-        unmatched_old.extend(old_matches[common:])
-        unmatched_new.extend(new_matches[common:])
-
-    unmatched_old.sort(key=_fact_sort_key)
-    unmatched_new.sort(key=_fact_sort_key)
-    common = min(len(unmatched_old), len(unmatched_new))
-    for index in range(common):
-        old_fact, new_fact = unmatched_old[index], unmatched_new[index]
+    for key in sorted(old_by_full.keys() & new_by_full.keys(), key=_comparison_sort_key):
+        old_fact, new_fact = old_by_full[key][0], new_by_full[key][0]
         differences.append(
-            ParameterDifference(
-                _paired_key(old_fact, new_fact), old_fact, new_fact, DiffKind.UNKNOWN_SCOPE
-            )
+            ParameterDifference(key, old_fact, new_fact, _matched_kind(old_fact, new_fact))
         )
 
-    differences.extend(
-        ParameterDifference(fact.comparison_key(), fact, None, DiffKind.REMOVED)
-        for fact in unmatched_old[common:]
-    )
-    differences.extend(
-        ParameterDifference(fact.comparison_key(), None, fact, DiffKind.ADDED)
-        for fact in unmatched_new[common:]
-    )
+    unmatched_old = [fact for key, facts in old_by_full.items() if key not in new_by_full for fact in facts]
+    unmatched_new = [fact for key, facts in new_by_full.items() if key not in old_by_full for fact in facts]
+    if not unmatched_old and not unmatched_new:
+        return differences
+    if len(unmatched_old) == len(unmatched_new) == 1:
+        differences.append(
+            ParameterDifference(
+                _paired_key(unmatched_old[0], unmatched_new[0]),
+                unmatched_old[0],
+                unmatched_new[0],
+                DiffKind.UNKNOWN_SCOPE,
+            )
+        )
+    else:
+        differences.append(_ambiguous_difference(unmatched_old, unmatched_new))
     return differences
 
 
 def _matched_kind(old_fact: ParameterFact, new_fact: ParameterFact) -> DiffKind:
     if not _has_complete_comparison_scope(old_fact) or not _has_complete_comparison_scope(new_fact):
         return DiffKind.UNKNOWN_SCOPE
+    if not _has_compatible_normalized_values(old_fact, new_fact):
+        return DiffKind.UNKNOWN_SCOPE
     return (
         DiffKind.UNCHANGED
         if old_fact.normalized_value == new_fact.normalized_value
         else DiffKind.CHANGED
     )
+
+
+def _has_compatible_normalized_values(
+    old_fact: ParameterFact, new_fact: ParameterFact
+) -> bool:
+    old_value, new_value = old_fact.normalized_value, new_fact.normalized_value
+    if old_value is None or new_value is None:
+        return False
+    if not math.isfinite(old_value) or not math.isfinite(new_value):
+        return False
+    if old_fact.canonical_unit != new_fact.canonical_unit:
+        return False
+    return True
 
 
 def _has_complete_comparison_scope(fact: ParameterFact) -> bool:

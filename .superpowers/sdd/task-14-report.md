@@ -38,6 +38,34 @@ python -m pytest -q
 121 passed, 1 warning in 1.24s
 ```
 
+## Review Fix Status
+
+Addressed all coordinator findings. `diff_parameters` now requires a confirmed `PairingAssessment` keyword argument; omitting it raises `TypeError`. Subject-only changes are paired by canonical name as `UNKNOWN_SCOPE`. `UNCHANGED`/`CHANGED` require finite normalized values and equal non-null canonical units. Duplicate full keys, reordered duplicates, and unequal cardinality produce one conservative `UNKNOWN_SCOPE` ambiguity rather than fact-ID pairing. Mixed V/date stems use deterministic V-marker precedence; date-only stems use calendar order. Removed the unused pairing import.
+
+## Review-Fix Tests and Exact Output
+
+Focused command:
+
+```text
+python -m pytest tests/unit/test_parameter_diff.py tests/unit/test_pairing.py tests/contract/test_pairing_confirmation.py -q
+22 passed, 1 warning in 0.47s
+```
+
+Full command:
+
+```text
+python -m pytest -q
+128 passed, 1 warning in 1.22s
+```
+
+Changed files:
+
+- `app/diff/pairing.py`
+- `app/diff/parameter_diff.py`
+- `tests/unit/test_pairing.py`
+- `tests/unit/test_parameter_diff.py`
+- `.superpowers/sdd/task-14-report.md`
+
 ## Concerns
 
-The existing pytest configuration emits `PytestConfigWarning: Unknown config option: asyncio_mode`; this predates Task 14 and does not affect the passing suite. The public two-argument `diff_parameters(old, new)` remains available for callers without a pairing workflow; passing `pairing=` activates the required confirmation gate.
+The existing pytest configuration emits `PytestConfigWarning: Unknown config option: asyncio_mode`; this predates Task 14 and does not affect the passing suite. Ambiguous same-name fact groups intentionally return a single `UNKNOWN_SCOPE` result without exposing arbitrary fact pairing.

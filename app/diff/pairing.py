@@ -7,7 +7,6 @@ from datetime import date
 from enum import Enum
 from pathlib import PurePath
 import re
-from typing import Iterable
 
 
 FILENAME_WEIGHT = 0.55
@@ -105,23 +104,28 @@ def assert_pairing_confirmed(assessment: PairingAssessment) -> PairingAssessment
 def pair_documents(files: list[str]) -> list[tuple[str, str]]:
     """Pair adjacent versions from each filename stem by V marker or date.
 
-    Unversioned files are ignored. Version markers take precedence over dates;
-    files with different stems are never paired merely because their versions
-    happen to be adjacent.
+    Unversioned files are ignored. Version markers take precedence over dates
+    within a stem. A stem never mixes marker families: if it contains any V
+    markers, date-only files are ignored; otherwise date files are sorted by
+    calendar date. This makes mixed V/date input deterministic and avoids
+    comparing unlike token types.
     """
-    groups: dict[str, list[tuple[int | date, str]]] = {}
+    grouped: dict[str, list[tuple[str, int | date, str]]] = {}
     for file_name in files:
-        version = _version_token(file_name)
-        if version is None:
+        token = _version_token(file_name)
+        if token is None:
             continue
-        groups.setdefault(_document_stem(file_name), []).append((version, file_name))
+        stem = _document_stem(file_name)
+        grouped.setdefault(stem, []).append(token)
 
     pairs: list[tuple[str, str]] = []
-    for versions in groups.values():
-        versions.sort(key=lambda item: (item[0], item[1]))
+    for versions in grouped.values():
+        family = "v" if any(kind == "v" for kind, _, _ in versions) else "date"
+        selected = [item for item in versions if item[0] == family]
+        selected.sort(key=lambda item: (item[1], item[2]))
         pairs.extend(
-            (versions[index][1], versions[index + 1][1])
-            for index in range(len(versions) - 1)
+            (selected[index][2], selected[index + 1][2])
+            for index in range(len(selected) - 1)
         )
     return pairs
 
@@ -133,20 +137,21 @@ def _document_stem(file_name: str) -> str:
     return stem.rstrip("_.- ").casefold()
 
 
-def _version_token(file_name: str) -> int | date | None:
+def _version_token(file_name: str) -> tuple[str, int | date, str] | None:
     stem = PurePath(file_name).stem
     version_match = _VERSION_PATTERN.search(stem)
     if version_match:
-        return int(version_match.group("version"))
+        return "v", int(version_match.group("version")), file_name
 
     date_match = _DATE_PATTERN.search(stem)
     if not date_match:
         return None
     try:
-        return date(
+        token = date(
             int(date_match.group("year")),
             int(date_match.group("month")),
             int(date_match.group("day")),
         )
     except ValueError:
         return None
+    return "date", token, file_name
