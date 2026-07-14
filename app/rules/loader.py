@@ -31,6 +31,17 @@ _OPERATOR_NAMES = frozenset(
 _RULE_FIELDS = frozenset(RuleDefinition.model_fields)
 
 
+def _validate_mapping_keys(value: Any) -> None:
+    if isinstance(value, dict):
+        if any(not isinstance(key, str) for key in value):
+            raise RuleLoadError("YAML 映射键必须是字符串")
+        for nested in value.values():
+            _validate_mapping_keys(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            _validate_mapping_keys(nested)
+
+
 def _read_yaml(path: Path) -> dict[str, Any]:
     """Read a YAML mapping without constructing arbitrary Python objects."""
     try:
@@ -40,6 +51,7 @@ def _read_yaml(path: Path) -> dict[str, Any]:
 
     if not isinstance(value, dict):
         raise RuleLoadError("YAML 根节点必须是对象")
+    _validate_mapping_keys(value)
     return value
 
 
@@ -69,6 +81,8 @@ def _validate_rule_row(row: Any, index: int) -> RuleDefinition:
 
     if rule.operator not in _OPERATOR_NAMES:
         raise RuleLoadError(f"未知 operator: {rule.operator}")
+    if rule.source_type != "DEMO_ONLY":
+        raise RuleLoadError(f"不支持 source_type: {rule.source_type}")
     return rule
 
 

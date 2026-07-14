@@ -43,7 +43,25 @@ def test_loads_demo_rule_shape_and_model_defaults(tmp_path: Path) -> None:
     assert rules[0].source_type == "DEMO_ONLY"
 
 
-def test_preserves_explicit_source_type_and_optional_values(tmp_path: Path) -> None:
+def test_rejects_non_demo_source_type(tmp_path: Path) -> None:
+    path = write(
+        tmp_path / "rules.yaml",
+        "rules:\n"
+        "  - rule_id: R1\n"
+        "    version: '0.1'\n"
+        "    name: test\n"
+        "    category: completeness\n"
+        "    severity: medium\n"
+        "    operator: all_equal\n"
+        "    on_missing: unknown\n"
+        "    source_type: POLICY\n",
+    )
+
+    with pytest.raises(RuleLoadError, match="source_type"):
+        load_rules(path)
+
+
+def test_retains_demo_source_type_and_optional_values(tmp_path: Path) -> None:
     path = write(
         tmp_path / "rules.yaml",
         "rules:\n"
@@ -56,14 +74,14 @@ def test_preserves_explicit_source_type_and_optional_values(tmp_path: Path) -> N
         "    on_missing: unknown\n"
         "    enabled: false\n"
         "    params: {parameter: 开发井总数}\n"
-        "    source_type: POLICY\n",
+        "    source_type: DEMO_ONLY\n",
     )
 
     rule = load_rules(path)[0]
 
     assert rule.enabled is False
     assert rule.params == {"parameter": "开发井总数"}
-    assert rule.source_type == "POLICY"
+    assert rule.source_type == "DEMO_ONLY"
 
 
 @pytest.mark.parametrize(
@@ -156,6 +174,7 @@ def test_loads_aliases(tmp_path: Path) -> None:
     [
         ("rules: []\n", "缺少 aliases"),
         ("aliases: []\n", "必须是对象"),
+        ("aliases:\n  1: [部署井数]\n", "字符串"),
         ("aliases:\n  开发井总数: 部署井数\n", "列表"),
         ("aliases:\n  开发井总数: [部署井数, 1]\n", "字符串"),
     ],
