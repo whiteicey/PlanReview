@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.domain.enums import Origin, ReviewStatus, RuleStatus, Severity
+from app.domain.enums import ExtractionMethod, Origin, ReviewStatus, RuleStatus, Severity
+from app.domain.schemas import ParameterFact
 from app.domain.schemas import Finding, RuleResult
 from app.persistence.db import create_session
 from app.persistence.models import CaseRecord
@@ -58,6 +59,20 @@ def test_round_trip_run_and_human_review(tmp_path):
     assert reviewed is not None
     assert reviewed.findings[0].review_status is ReviewStatus.CONFIRMED
     assert reviewed.findings[0].human_note == "专家确认"
+
+
+def test_facts_round_trip_with_source_document_in_fresh_session(tmp_path):
+    db = tmp_path / "review.db"
+    fact = ParameterFact(
+        fact_id="fact-1", canonical_name="capacity", raw_name="Capacity", raw_value="10",
+        source_document="方案.docx", source_span_id="span-1", extraction_method=ExtractionMethod.REGEX,
+    )
+    ReviewRepository(create_session(db)).save_run(ReviewRun("CASE-facts", facts=[fact]))
+    loaded = ReviewRepository(create_session(db)).get_run("CASE-facts")
+    assert loaded is not None
+    assert loaded.facts[0].source_document == "方案.docx"
+    assert loaded.facts[0].fact_id == "fact-1"
+    assert loaded.facts[0].source_span_id == "span-1"
 
 
 def test_save_run_is_idempotent_for_same_finding_id(tmp_path):
@@ -162,6 +177,15 @@ def test_absolute_storage_path_and_unconfirmed_delete_are_rejected(tmp_path, sto
         assert "confirmation" in str(exc)
     else:
         raise AssertionError("permanent deletion must require exact confirmation")
+
+
+def test_unicode_safe_name_persists(tmp_path):
+    repo = ReviewRepository(create_session(tmp_path / "review.db"))
+    case = CaseRecord(case_id="CASE-unicode", files=[StoredFile(
+        storage_relative_path="cases/CASE-unicode/documents/方案.docx",
+        sha256="a" * 64, size=1, safe_name="方案.docx",
+    )])
+    assert repo.save_case(case) == "CASE-unicode"
 
 
 @pytest.mark.parametrize("safe_name", ["../outside.pdf", "a.pdf", "a\\\\b.docx", "a" * 252 + ".docx"])

@@ -35,7 +35,6 @@ from app.review.pipeline import ReviewRun
 from app.storage.case_files import StoredFile
 
 _SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
-_SAFE_BASENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_. -]{0,254}\.docx$", re.IGNORECASE)
 
 _SECRET_OR_BODY_MARKERS = (
     "api_key",
@@ -143,14 +142,14 @@ class ReviewRepository:
                 record = ReviewRunORM(
                     case=case,
                     final_status=run.final_status,
-                    facts=_sanitize_json(_facts_to_dict(run.facts)),
+                    facts=_sanitize_facts(run.facts),
                     stage_records=_sanitize_json(_models_to_dict(run.stage_records)),
                 )
                 self.session.add(record)
                 self.session.flush()
             else:
                 record.final_status = run.final_status
-                record.facts = _sanitize_json(_facts_to_dict(run.facts))
+                record.facts = _sanitize_facts(run.facts)
                 record.stage_records = _sanitize_json(_models_to_dict(run.stage_records))
                 # Delete children explicitly and flush before inserting replacements.
                 self.session.query(RuleResultORM).filter(
@@ -295,7 +294,8 @@ class ReviewRepository:
                 or PureWindowsPath(safe_name).is_absolute()
                 or PureWindowsPath(safe_name).root
                 or PureWindowsPath(safe_name).drive
-                or not _SAFE_BASENAME_RE.fullmatch(safe_name)
+                or any(ord(char) < 32 for char in safe_name)
+                or safe_name.startswith(".")
             ):
                 raise ValueError("safe_name must be a portable .docx basename")
             path = item.storage_relative_path
@@ -322,7 +322,7 @@ class ReviewRepository:
 
 
 def _validate_run_payload(run: ReviewRun) -> None:
-    _sanitize_json(_facts_to_dict(run.facts))
+    _sanitize_facts(run.facts)
     _sanitize_json(_models_to_dict(run.stage_records))
     for result in run.rule_results:
         _rule_result_row(result, 0, 0)
@@ -406,6 +406,13 @@ def _to_finding(row: FindingORM) -> Finding:
     )
 
 
+def _sanitize_facts(values: list[ParameterFact]) -> list[dict[str, Any]]:
+    facts = _facts_to_dict(values)
+    # Do not pass this field-aware structure through generic key filtering:
+    # source_document is a safe metadata identifier, not document content.
+    return facts
+
+
 def _facts_to_dict(values: list[ParameterFact]) -> list[dict[str, Any]]:
     return [
         {
@@ -420,7 +427,7 @@ def _facts_to_dict(values: list[ParameterFact]) -> list[dict[str, Any]]:
             "time_scope": _safe_identifier(value.time_scope, "time_scope", optional=True),
             "statistical_scope": _safe_identifier(value.statistical_scope, "statistical_scope", optional=True),
             "condition": _safe_identifier(value.condition, "condition", optional=True),
-            "source_document": _safe_identifier(value.source_document, "source_document"),
+            "source_document": _safe_source_document(value.source_document),
             "source_version": _safe_identifier(value.source_version, "source_version", optional=True),
             "source_span_id": _safe_identifier(value.source_span_id, "source_span_id"),
             "extraction_method": value.extraction_method.value,
@@ -440,6 +447,16 @@ def _to_plain_json(value: Any) -> Any:
         return value.model_dump(mode="json")
     if is_dataclass(value):
         return asdict(value)
+    return value
+
+
+def _safe_source_document(value: str) -> str:
+    if not isinstance(value, str) or not 1 <= len(value) <= 255:
+        raise ValueError("source_document must be bounded metadata")
+    if any(ord(char) < 32 for char in value) or _contains_prohibited_content(value):
+        raise ValueError("source_document must be safe metadata")
+    if "/" in value or "\\" in value or PureWindowsPath(value).is_absolute() or PureWindowsPath(value).root:
+        raise ValueError("source_document must be a safe metadata identifier")
     return value
 
 
