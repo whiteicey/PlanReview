@@ -84,3 +84,7 @@ def test_anonymous_package_contains_only_honest_anonymized_export_data(tmp_path)
         "cost": "not_measured",
     }
     assert payload["findings"][0]["review_status"] == "confirmed"
+    assert "title" not in payload["findings"][0]
+    assert "description" not in payload["findings"][0]
+    assert "suggestion" not in payload["findings"][0]
+    assert "human_note" not in payload["findings"][0]

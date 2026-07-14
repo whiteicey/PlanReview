@@ -19,11 +19,7 @@ _FINDING_COLUMNS = (
     "suggestion", "evidence_span_ids", "review_status", "human_note",
 )
 _HASH_RE = re.compile(r"[0-9a-f]{64}\Z")
-_ANONYMOUS_TEXT_FORBIDDEN = re.compile(
-    r"(?i)(?:vendor|model|base[_\s-]?url|request[_\s-]?id|api[_\s-]?key|"
-    r"authorization|bearer|token|secret|password|raw[_\s-]?doc(?:ument)?|"
-    r"(?:https?|wss?)://|(?:[a-z]:[\\/]|/)[^\s]+|\.docx\b)"
-)
+_SAFE_LABEL = re.compile(r"[A-Za-z0-9_.:-]{1,128}\Z")
 
 
 def _rows(run: ReviewRun) -> list[dict[str, str | None]]:
@@ -95,21 +91,17 @@ def export_anonymous_package(run: ReviewRun, target_zip: Path) -> Path:
             {
                 "finding_id": f"finding-{index:04d}",
                 "origin": item.origin.value,
-                "category": _anonymous_text(item.category, run.case_id),
+                "category": _safe_label(item.category, "category"),
                 "severity": item.severity.value,
-                "title": _anonymous_text(item.title, run.case_id),
-                "description": _anonymous_text(item.description, run.case_id),
-                "suggestion": _anonymous_text(item.suggestion, run.case_id),
                 "evidence_span_ids": [span_aliases[span_id] for span_id in item.evidence_span_ids],
                 "review_status": item.review_status.value,
-                "human_note": _anonymous_text(item.human_note, run.case_id),
             }
             for index, item in enumerate(run.findings, start=1)
         ],
         "rule_versions": [
             {
                 "rule_id": f"rule-{index:04d}",
-                "version": _anonymous_text(_rule_version(result), run.case_id),
+                "version": _safe_label(_rule_version(result), "rule version"),
             }
             for index, result in enumerate(_versioned_rule_results(run), start=1)
         ],
@@ -175,10 +167,8 @@ def _anonymous_evidence_hashes(run: ReviewRun, aliases: dict[str, str]) -> dict[
     return hashes
 
 
-def _anonymous_text(value: str | None, case_id: str) -> str | None:
-    """Keep de-identified prose while redacting values that identify systems or sources."""
-    if value is None:
-        return None
-    if (case_id and case_id in value) or _ANONYMOUS_TEXT_FORBIDDEN.search(value):
-        return "[REDACTED]"
+def _safe_label(value: str | None, field_name: str) -> str:
+    """Allow only bounded structured labels; never serialize arbitrary prose."""
+    if not isinstance(value, str) or _SAFE_LABEL.fullmatch(value) is None:
+        raise ValueError(f"{field_name} must be a bounded structured label")
     return value

@@ -29,7 +29,7 @@ def test_anonymous_package_excludes_identity_source_paths_and_raw_documents(tmp_
                 category="c",
                 severity=Severity.HIGH,
                 title="Safe finding",
-                description="Safe description CASE-IDENTITY-42",
+                description="The process receives 220 units per day and stores output in a covered tank.",
                 suggestion="Safe suggestion",
                 evidence_span_ids=["internal-span-id"],
                 needs_human_review=True,
@@ -48,7 +48,7 @@ def test_anonymous_package_excludes_identity_source_paths_and_raw_documents(tmp_
         payload = json.loads(text)
 
     assert payload["findings"][0]["evidence_span_ids"] == ["evidence-0001"]
-    assert payload["findings"][0]["description"] == "[REDACTED]"
+    assert "description" not in payload["findings"][0]
     assert payload["evidence_text_hashes"] == {"evidence-0001": "b" * 64}
     for value in forbidden_values.values():
         assert value not in text
