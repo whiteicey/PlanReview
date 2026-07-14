@@ -14,7 +14,8 @@ Completed. Implemented Excel, Word, and strict anonymous finding exports with th
 
 ## Commits
 
-- Pending commit: `feat: export findings with disclaimer and anonymous package guard`
+- `481851d feat: export findings with disclaimer and anonymous package guard`
+- Pending follow-up commit: legacy SQLite additive migration verification
 
 ## Exact tests/output
 
@@ -32,6 +33,13 @@ python -m pytest tests/unit/test_exporters.py tests/security/test_anonymous_expo
 4 passed, 1 warning in 0.76s
 ```
 
+Migration and integration regression:
+
+```text
+python -m pytest tests/unit/test_db_migrations.py tests/unit/test_exporters.py tests/security/test_anonymous_export.py tests/unit/test_repository.py tests/contract/test_api.py -v
+36 passed, 1 warning in 4.76s
+```
+
 Task 20 integration regression:
 
 ```text
@@ -43,11 +51,11 @@ Full suite:
 
 ```text
 python -m pytest -v
-241 passed, 1 warning in 7.50s
+242 passed, 1 warning in 7.28s
 ```
 
 The warning is pre-existing pytest configuration: `PytestConfigWarning: Unknown config option: asyncio_mode`.
 
 ## Concerns
 
-- Existing SQLite databases created before this task do not receive automatic migrations. New databases created through the current session factory have the new rule-version and evidence-hash columns. Legacy in-memory/manual runs without retained evidence hashes export anonymous findings with no hash entry rather than fabricating a hash.
+- Existing SQLite databases receive additive migration for the new rule-version and evidence-hash columns at session creation. Legacy in-memory/manual runs without retained evidence hashes export anonymous findings with no hash entry rather than fabricating a hash.

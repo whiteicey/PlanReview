@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -24,4 +24,24 @@ def create_session(db_path: Path) -> Session:
         cursor.close()
 
     Base.metadata.create_all(engine)
+    _upgrade_schema(engine)
     return Session(engine, expire_on_commit=False)
+
+
+def _upgrade_schema(engine: Engine) -> None:
+    """Apply additive SQLite columns required by newer local export metadata."""
+    inspector = inspect(engine)
+    required_columns = {
+        "review_runs": {"evidence_text_hashes": "JSON NOT NULL DEFAULT '{}'"},
+        "rule_results": {"rule_version": "VARCHAR(255)"},
+    }
+    with engine.begin() as connection:
+        for table_name, columns in required_columns.items():
+            if not inspector.has_table(table_name):
+                continue
+            existing = {column["name"] for column in inspector.get_columns(table_name)}
+            for column_name, definition in columns.items():
+                if column_name not in existing:
+                    connection.execute(
+                        text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
+                    )
