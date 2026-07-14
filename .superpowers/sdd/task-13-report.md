@@ -12,7 +12,7 @@ Completed.
 
 ## Commits
 
-`<pending>`
+`dcf6ecb feat: enforce evidence gate and three-valued rule engine`
 
 ## Tests and output
 
