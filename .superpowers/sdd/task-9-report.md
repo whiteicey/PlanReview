@@ -34,4 +34,32 @@ python -m pytest -q
 
 ## Concerns
 
-Pytest emits the existing warning `Unknown config option: asyncio_mode`; this task did not change test configuration. Terminology matching intentionally trims only surrounding whitespace and does not infer or alter near-matching business terms. Mapping collisions are resolved deterministically in favor of an exact canonical-name match.
+Pytest emits the existing warning `Unknown config option: asyncio_mode`; this task did not change test configuration. Terminology matching intentionally trims only surrounding whitespace for alias lookup and does not infer or alter near-matching business terms. Unknown terminology preserves its original raw string, including surrounding whitespace. Mapping collisions are resolved deterministically in favor of an exact canonical-name match.
+
+## Review fix update
+
+### Review-fix status
+
+Fixed both review findings. Unknown terms now return the original raw string unchanged. `canonical_to_aliases` now uses `MappingProxyType`, while aliases remain `frozenset`, so both mapping and alias collections reject mutation. Added regression tests for whitespace preservation and mutation rejection.
+
+### Changed files
+
+- `app/extraction/terminology.py`
+- `tests/unit/test_terminology.py`
+- `.superpowers/sdd/task-9-report.md`
+
+### Exact verification output
+
+Focused regression run:
+
+```text
+python -m pytest tests/unit/test_terminology.py -v
+6 passed, 1 warning in 0.13s
+```
+
+Full-suite regression run:
+
+```text
+python -m pytest -q
+47 passed, 1 warning in 0.79s
+```

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Mapping
 
 from app.domain.schemas import ParameterFact
 
@@ -13,19 +15,18 @@ class TerminologyMap:
     mapping is not used for fuzzy or similarity-based business-field changes.
     """
 
-    canonical_to_aliases: dict[str, frozenset[str]]
+    canonical_to_aliases: Mapping[str, frozenset[str]]
 
     @classmethod
     def from_mapping(cls, mapping: dict[str, list[str]]) -> TerminologyMap:
         """Build a terminology map with trimmed canonical names and aliases."""
-        return cls(
-            {
-                canonical.strip(): frozenset(
-                    {canonical.strip(), *(alias.strip() for alias in aliases)}
-                )
-                for canonical, aliases in mapping.items()
-            }
-        )
+        normalized = {
+            canonical.strip(): frozenset(
+                {canonical.strip(), *(alias.strip() for alias in aliases)}
+            )
+            for canonical, aliases in mapping.items()
+        }
+        return cls(MappingProxyType(normalized))
 
     def canonicalize(self, raw_name: str) -> str:
         """Return the mapped canonical name, or the trimmed unknown name.
@@ -48,7 +49,7 @@ class TerminologyMap:
         for canonical, aliases in self.canonical_to_aliases.items():
             if value in aliases:
                 return canonical
-        return value
+        return raw_name
 
 
 def normalize_facts(

@@ -33,6 +33,7 @@ def test_alias_maps_to_canonical_name():
 def test_unknown_term_is_not_silently_changed():
     terms = TerminologyMap.from_mapping({"开发井总数": ["部署井数"]})
     assert terms.canonicalize("未知井数") == "未知井数"
+    assert terms.canonicalize("  未知井数  ") == "  未知井数  "
 
 
 def test_whitespace_wrapped_alias_maps_without_fuzzy_matching():
@@ -62,3 +63,22 @@ def test_canonical_match_takes_precedence_over_aliases():
     )
     assert terms.canonicalize("部署井数") == "部署井数"
     assert terms.canonicalize("井数") == "部署井数"
+
+
+def test_terminology_mapping_and_alias_sets_reject_mutation():
+    terms = TerminologyMap.from_mapping({"开发井总数": ["部署井数"]})
+
+    try:
+        terms.canonical_to_aliases["新术语"] = frozenset({"新术语"})
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("canonical mapping must reject mutation")
+
+    assert isinstance(terms.canonical_to_aliases["开发井总数"], frozenset)
+    try:
+        terms.canonical_to_aliases["开发井总数"].add("其他名称")
+    except AttributeError:
+        pass
+    else:
+        raise AssertionError("alias set must reject mutation")
