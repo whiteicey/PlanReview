@@ -29,8 +29,14 @@ class CredentialStoreError(RuntimeError):
 class CredentialStore:
     """Store provider credentials exclusively through the system keyring."""
 
-    def __init__(self, service: str = _DEFAULT_SERVICE) -> None:
+    def __init__(
+        self,
+        service: str = _DEFAULT_SERVICE,
+        *,
+        _expected_backend_type: type | None = None,
+    ) -> None:
         self.service = self._validate_service(service)
+        self._expected_backend_type = _expected_backend_type or WinVaultKeyring
 
     @staticmethod
     def _validate_service(service: str) -> str:
@@ -56,40 +62,47 @@ class CredentialStore:
     def _operation_error(provider: str) -> CredentialStoreError:
         return CredentialStoreError(f"keyring operation failed for provider {provider!r}")
 
-    @staticmethod
-    def _ensure_windows_credential_manager(provider: str) -> None:
-        """Fail closed unless the active backend is Windows Credential Manager."""
+    def _validated_backend(self, provider: str):
+        """Return the exact validated backend instance used for the operation."""
         if sys.platform != "win32":
             raise CredentialStoreError(
                 f"Windows Credential Manager required for provider {provider!r}"
             )
         try:
             backend = keyring.get_keyring()
+            if type(backend) is not self._expected_backend_type:
+                raise CredentialStoreError(
+                    f"Windows Credential Manager required for provider {provider!r}"
+                )
+            for method_name in ("set_password", "get_password", "delete_password"):
+                if not callable(getattr(backend, method_name)):
+                    raise CredentialStoreError(
+                        f"Windows Credential Manager unavailable for provider {provider!r}"
+                    )
+        except CredentialStoreError:
+            raise
         except Exception:
             raise CredentialStoreError(
                 f"Windows Credential Manager unavailable for provider {provider!r}"
             ) from None
-        if type(backend) is not WinVaultKeyring:
-            raise CredentialStoreError(
-                f"Windows Credential Manager required for provider {provider!r}"
-            )
+        return backend
 
     def set_key(self, provider: str, key: str) -> None:
         """Store ``key`` under the validated provider username in keyring."""
         provider = self._validate_provider(provider)
         key = self._validate_key(provider, key)
-        self._ensure_windows_credential_manager(provider)
+        backend = self._validated_backend(provider)
         try:
-            keyring.set_password(self.service, provider, key)
+            backend.set_password(self.service, provider, key)
         except Exception:
             raise self._operation_error(provider) from None
 
     def get_key(self, provider: str) -> str | None:
         """Retrieve a provider key, or ``None`` when no key is registered."""
         provider = self._validate_provider(provider)
-        self._ensure_windows_credential_manager(provider)
+        backend = self._validated_backend(provider)
         try:
-            value = keyring.get_password(self.service, provider)
+            value = backend.get_password(self.service, provider)
         except Exception:
             raise self._operation_error(provider) from None
         if value is not None and not isinstance(value, str):
@@ -99,9 +112,9 @@ class CredentialStore:
     def delete_key(self, provider: str) -> None:
         """Delete a provider key; deleting an absent key is a no-op."""
         provider = self._validate_provider(provider)
-        self._ensure_windows_credential_manager(provider)
+        backend = self._validated_backend(provider)
         try:
-            keyring.delete_password(self.service, provider)
+            backend.delete_password(self.service, provider)
         except keyring.errors.PasswordDeleteError:
             return
         except Exception:

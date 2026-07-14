@@ -7,6 +7,24 @@ from keyring.backends.Windows import WinVaultKeyring
 from app.security.credentials import CredentialStore
 
 
+class FakeVaultBackend:
+    def __init__(self):
+        self.values = {}
+        self.calls = []
+
+    def set_password(self, service, provider, key):
+        self.calls.append(("set", service, provider, key))
+        self.values[(service, provider)] = key
+
+    def get_password(self, service, provider):
+        self.calls.append(("get", service, provider))
+        return self.values.get((service, provider))
+
+    def delete_password(self, service, provider):
+        self.calls.append(("delete", service, provider))
+        self.values.pop((service, provider), None)
+
+
 class SpoofedWinVaultKeyring:
     __module__ = "keyring.backends.Windows"
 
@@ -15,28 +33,25 @@ class FileBackend:
     __module__ = "keyring.backends.file"
 
 
-def test_credentials_use_keyring(monkeypatch):
-    monkeypatch.setattr(keyring, "get_keyring", lambda: WinVaultKeyring())
-    values = {}
-    monkeypatch.setattr(
-        "keyring.set_password",
-        lambda service, user, password: values.__setitem__((service, user), password),
-    )
-    monkeypatch.setattr(
-        "keyring.get_password",
-        lambda service, user: values.get((service, user)),
-    )
-    monkeypatch.setattr(
-        "keyring.delete_password",
-        lambda service, user: values.pop((service, user), None),
-    )
+def make_fake_store(monkeypatch):
+    backend = FakeVaultBackend()
+    monkeypatch.setattr(keyring, "get_keyring", lambda: backend)
+    return backend, CredentialStore(_expected_backend_type=FakeVaultBackend)
 
-    store = CredentialStore()
+
+def test_credentials_use_validated_backend_instance(monkeypatch):
+    backend, store = make_fake_store(monkeypatch)
+    top_level_calls = []
+    monkeypatch.setattr(keyring, "set_password", lambda *args: top_level_calls.append(("set", args)))
+    monkeypatch.setattr(keyring, "get_password", lambda *args: top_level_calls.append(("get", args)))
+    monkeypatch.setattr(keyring, "delete_password", lambda *args: top_level_calls.append(("delete", args)))
+
     store.set_key("anthropic", "secret-value")
-
     assert store.get_key("anthropic") == "secret-value"
     store.delete_key("anthropic")
     assert store.get_key("anthropic") is None
+    assert [call[0] for call in backend.calls] == ["set", "get", "delete", "get"]
+    assert top_level_calls == []
 
 
 @pytest.mark.parametrize("backend_factory", [FileBackend, SpoofedWinVaultKeyring])
@@ -59,7 +74,10 @@ def test_rejected_backend_never_receives_get_or_delete(monkeypatch):
     monkeypatch.setattr(keyring, "get_password", lambda *args: get_calls.append(args))
     monkeypatch.setattr(keyring, "delete_password", lambda *args: delete_calls.append(args))
 
-    for operation in (lambda: CredentialStore().get_key("anthropic"), lambda: CredentialStore().delete_key("anthropic")):
+    for operation in (
+        lambda: CredentialStore().get_key("anthropic"),
+        lambda: CredentialStore().delete_key("anthropic"),
+    ):
         with pytest.raises(RuntimeError, match="anthropic"):
             operation()
 
@@ -67,62 +85,57 @@ def test_rejected_backend_never_receives_get_or_delete(monkeypatch):
     assert delete_calls == []
 
 
-def test_provider_names_are_validated_before_keyring_calls(monkeypatch):
-    calls = []
-    monkeypatch.setattr(
-        keyring,
-        "set_password",
-        lambda *args: calls.append(args),
-    )
-    store = CredentialStore()
+def test_validation_then_top_level_backend_swap_does_not_change_target(monkeypatch):
+    validated_backend = FakeVaultBackend()
+    unsafe_backend = FileBackend()
+    monkeypatch.setattr(keyring, "get_keyring", lambda: validated_backend)
+    monkeypatch.setattr(keyring, "set_password", lambda *args: (_ for _ in ()).throw(AssertionError("top-level used")))
+    store = CredentialStore(_expected_backend_type=FakeVaultBackend)
 
+    # A top-level lookup swap cannot redirect the already validated instance.
+    original_set = validated_backend.set_password
+    def swap_then_set(service, provider, key):
+        monkeypatch.setattr(keyring, "get_keyring", lambda: unsafe_backend)
+        original_set(service, provider, key)
+    validated_backend.set_password = swap_then_set
+
+    store.set_key("anthropic", "secret-value")
+    assert validated_backend.values[("review-assistant", "anthropic")] == "secret-value"
+
+
+def test_provider_names_are_validated_before_keyring_calls(monkeypatch):
+    backend, store = make_fake_store(monkeypatch)
     for provider in ("", " ", "anthropic/openai", "anthropic\\openai", "../anthropic"):
         with pytest.raises(ValueError, match="provider"):
             store.set_key(provider, "secret-value")
-
-    assert calls == []
+    assert backend.calls == []
 
 
 def test_get_and_delete_failures_are_sanitized(monkeypatch):
-    monkeypatch.setattr(keyring, "get_keyring", lambda: WinVaultKeyring())
+    backend, store = make_fake_store(monkeypatch)
     secret = "get-secret-value"
-
-    def fail_get(service, provider):
-        raise RuntimeError(f"backend rejected {secret}")
-
-    def fail_delete(service, provider):
-        raise RuntimeError(f"backend rejected {secret}")
-
-    monkeypatch.setattr(keyring, "get_password", fail_get)
+    backend.get_password = lambda service, provider: (_ for _ in ()).throw(RuntimeError(secret))
     with pytest.raises(RuntimeError, match="anthropic") as get_error:
-        CredentialStore().get_key("anthropic")
+        store.get_key("anthropic")
     assert secret not in str(get_error.value)
 
-    monkeypatch.setattr(keyring, "delete_password", fail_delete)
+    backend.delete_password = lambda service, provider: (_ for _ in ()).throw(RuntimeError(secret))
     with pytest.raises(RuntimeError, match="anthropic") as delete_error:
-        CredentialStore().delete_key("anthropic")
+        store.delete_key("anthropic")
     assert secret not in str(delete_error.value)
 
 
 def test_keyring_failures_never_expose_key(monkeypatch):
-    monkeypatch.setattr(keyring, "get_keyring", lambda: WinVaultKeyring())
+    backend, store = make_fake_store(monkeypatch)
     secret = "super-secret-value"
-
-    def fail_set(service, provider, key):
-        raise RuntimeError(f"backend rejected {key}")
-
-    monkeypatch.setattr(keyring, "set_password", fail_set)
+    backend.set_password = lambda service, provider, key: (_ for _ in ()).throw(RuntimeError(key))
 
     with pytest.raises(RuntimeError, match="anthropic") as error:
-        CredentialStore().set_key("anthropic", secret)
-
+        store.set_key("anthropic", secret)
     assert secret not in str(error.value)
 
 
 def test_delete_missing_key_is_idempotent(monkeypatch):
-    monkeypatch.setattr(keyring, "get_keyring", lambda: WinVaultKeyring())
-    def missing(service, provider):
-        raise keyring.errors.PasswordDeleteError("not found")
-
-    monkeypatch.setattr(keyring, "delete_password", missing)
-    CredentialStore().delete_key("openai")
+    backend, store = make_fake_store(monkeypatch)
+    backend.delete_password = lambda service, provider: (_ for _ in ()).throw(keyring.errors.PasswordDeleteError("not found"))
+    store.delete_key("openai")
