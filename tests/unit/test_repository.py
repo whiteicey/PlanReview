@@ -227,6 +227,7 @@ def test_recycled_case_cannot_be_saved_without_restore(tmp_path):
     repo.delete_case_to_recycle_bin("CASE-recycled")
     with pytest.raises(ValueError, match="recycled"):
         repo.save_run(ReviewRun("CASE-recycled"))
+    repo.save_run(ReviewRun("CASE-fresh"))
 
 
 @pytest.mark.parametrize("bad_identifier", ["bad id", "../escape", "api/key", "原始文本"])

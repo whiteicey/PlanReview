@@ -93,25 +93,29 @@ class ReviewRepository:
         _safe_identifier(case.case_id, "case_id")
         self._validate_case_files(case.files)
         safe_statistics = _sanitize_json(case.statistics)
-        existing = self.session.get(CaseORM, case.case_id)
-        if existing is not None and self.session.get(RecycleBinORM, case.case_id) is not None:
-            raise ValueError("cannot save a recycled case without explicit restore")
-        if existing is None:
-            existing = CaseORM(case_id=case.case_id, statistics=safe_statistics)
-            self.session.add(existing)
-        else:
-            existing.statistics = safe_statistics
-            existing.files.clear()
-        existing.files.extend(
-            CaseFileORM(
-                storage_relative_path=item.storage_relative_path,
-                sha256=item.sha256,
-                size=item.size,
-                safe_name=item.safe_name,
+        try:
+            existing = self.session.get(CaseORM, case.case_id)
+            if existing is not None and self.session.get(RecycleBinORM, case.case_id) is not None:
+                raise ValueError("cannot save a recycled case without explicit restore")
+            if existing is None:
+                existing = CaseORM(case_id=case.case_id, statistics=safe_statistics)
+                self.session.add(existing)
+            else:
+                existing.statistics = safe_statistics
+                existing.files.clear()
+            existing.files.extend(
+                CaseFileORM(
+                    storage_relative_path=item.storage_relative_path,
+                    sha256=item.sha256,
+                    size=item.size,
+                    safe_name=item.safe_name,
+                )
+                for item in case.files
             )
-            for item in case.files
-        )
-        self.session.commit()
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
         self.session.refresh(existing)
         return existing.case_id
 
@@ -119,7 +123,7 @@ class ReviewRepository:
         """Replace a case's persisted run atomically with sanitized ORM rows."""
         if not isinstance(run, ReviewRun) or not run.case_id:
             raise ValueError("run.case_id is required")
-        _safe_text(run.case_id, "case_id")
+        _safe_identifier(run.case_id, "case_id")
         _safe_text(run.final_status, "final status")
         # Validate every payload before touching ORM state. The commit block below
         # still rolls back database errors; this preflight prevents a validation
@@ -208,42 +212,56 @@ class ReviewRepository:
         _safe_identifier(finding_id, "finding_id")
         if not isinstance(status, ReviewStatus):
             status = ReviewStatus(status)
-        finding = self.session.scalar(
-            select(FindingORM)
-            .join(ReviewRunORM)
-            .outerjoin(RecycleBinORM, RecycleBinORM.case_id == ReviewRunORM.case_id)
-            .where(
-                FindingORM.finding_id == finding_id,
-                ReviewRunORM.case_id == case_id,
-                RecycleBinORM.case_id.is_(None),
+        try:
+            finding = self.session.scalar(
+                select(FindingORM)
+                .join(ReviewRunORM)
+                .outerjoin(RecycleBinORM, RecycleBinORM.case_id == ReviewRunORM.case_id)
+                .where(
+                    FindingORM.finding_id == finding_id,
+                    ReviewRunORM.case_id == case_id,
+                    RecycleBinORM.case_id.is_(None),
+                )
             )
-        )
-        if finding is None:
-            raise KeyError(f"finding not found: {finding_id}")
-        finding.review_status = status.value
-        finding.human_note = _sanitize_note(note)
-        self.session.commit()
+            if finding is None:
+                raise KeyError(f"finding not found: {finding_id}")
+            finding.review_status = status.value
+            finding.human_note = _sanitize_note(note)
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
         self.session.refresh(finding)
 
     def delete_case_to_recycle_bin(self, case_id: str) -> None:
         """Hide a case from active queries while retaining it for confirmed deletion."""
-        if self.session.get(CaseORM, case_id) is None:
-            raise KeyError(f"case not found: {case_id}")
-        if self.session.get(RecycleBinORM, case_id) is None:
-            self.session.add(RecycleBinORM(case_id=case_id))
-        self.session.commit()
+        _safe_identifier(case_id, "case_id")
+        try:
+            if self.session.get(CaseORM, case_id) is None:
+                raise KeyError(f"case not found: {case_id}")
+            if self.session.get(RecycleBinORM, case_id) is None:
+                self.session.add(RecycleBinORM(case_id=case_id))
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
 
     def permanently_delete_case(self, case_id: str, confirmation: str) -> None:
         """Delete only a recycled case after the explicit, case-bound confirmation."""
-        if confirmation != f"DELETE {case_id}":
-            raise ValueError("confirmation must equal 'DELETE {case_id}'")
-        recycle_entry = self.session.get(RecycleBinORM, case_id)
-        if recycle_entry is None:
-            raise ValueError("case must be in recycle bin before permanent deletion")
-        case = self.session.get(CaseORM, case_id)
-        if case is not None:
-            self.session.delete(case)
-        self.session.commit()
+        _safe_identifier(case_id, "case_id")
+        try:
+            if confirmation != f"DELETE {case_id}":
+                raise ValueError("confirmation must equal 'DELETE {case_id}'")
+            recycle_entry = self.session.get(RecycleBinORM, case_id)
+            if recycle_entry is None:
+                raise ValueError("case must be in recycle bin before permanent deletion")
+            case = self.session.get(CaseORM, case_id)
+            if case is not None:
+                self.session.delete(case)
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
 
     def recycle_bin_case_ids(self) -> list[str]:
         """Return database-backed recycle-bin IDs for administrative confirmation."""
