@@ -164,6 +164,19 @@ def test_absolute_storage_path_and_unconfirmed_delete_are_rejected(tmp_path, sto
         raise AssertionError("permanent deletion must require exact confirmation")
 
 
+@pytest.mark.parametrize("safe_name", ["../outside.pdf", "a.pdf", "a\\\\b.docx", "a" * 252 + ".docx"])
+def test_safe_name_must_be_portable_docx_basename(tmp_path, safe_name):
+    repo = ReviewRepository(create_session(tmp_path / "review.db"))
+    with pytest.raises(ValueError, match="safe_name"):
+        repo.save_case(CaseRecord(
+            case_id="CASE-name",
+            files=[StoredFile(
+                storage_relative_path="cases/CASE-name/documents/a.docx",
+                sha256="a" * 64, size=1, safe_name=safe_name,
+            )],
+        ))
+
+
 def test_human_note_rejects_secret_tokens_bodies_and_document_content(tmp_path):
     repo = ReviewRepository(create_session(tmp_path / "review.db"))
     repo.save_run(ReviewRun("CASE-note", findings=[Finding(

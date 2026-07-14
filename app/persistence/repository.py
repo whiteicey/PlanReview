@@ -35,6 +35,7 @@ from app.review.pipeline import ReviewRun
 from app.storage.case_files import StoredFile
 
 _SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+_SAFE_BASENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_. -]{0,254}\.docx$", re.IGNORECASE)
 
 _SECRET_OR_BODY_MARKERS = (
     "api_key",
@@ -282,7 +283,21 @@ class ReviewRepository:
     @staticmethod
     def _validate_case_files(files: list[StoredFile]) -> None:
         for item in files:
-            _safe_text(item.safe_name, "safe file name")
+            safe_name = item.safe_name
+            if (
+                not isinstance(safe_name, str)
+                or len(safe_name) > 255
+                or not safe_name.casefold().endswith(".docx")
+                or safe_name in {".", ".."}
+                or "/" in safe_name
+                or "\\" in safe_name
+                or ".." in PureWindowsPath(safe_name).parts
+                or PureWindowsPath(safe_name).is_absolute()
+                or PureWindowsPath(safe_name).root
+                or PureWindowsPath(safe_name).drive
+                or not _SAFE_BASENAME_RE.fullmatch(safe_name)
+            ):
+                raise ValueError("safe_name must be a portable .docx basename")
             path = item.storage_relative_path
             native = Path(path)
             windows = PureWindowsPath(path)
