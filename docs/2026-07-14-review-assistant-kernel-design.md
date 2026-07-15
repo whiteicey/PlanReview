@@ -205,6 +205,8 @@ CREATED → VALIDATING_FILES → PAIRING_FILES → PARSING → BUILDING_SPANS
 
 **关键实现难点**：参数抽取须同时命中正文段落（问题句，如「钻井总数为38口」）与结构化表格（附件A 关键参数表 36），两处各生成独立 SourceSpan，冲突才可被 `all_equal` 抓到。这是 DEMO-002 井数 36/38/36 的成败点。
 
+> 更新（2026-07-15）：实现阶段在此 10 个之外新增 2 个仓库自有通用 operator——`reply_table_status_complete`(COMPLETENESS-003) 与 `prose_alias_unnormalized`(TERM-002)，共 12 个。跨参数算术 operator 不要求不同操作数共享 scope。DEMO-002 井数 36/38 的正文冲突经确认属于抽取限制（正文以非规范名抽取、无 scope），未由规则伪造。权威清单以 `app/rules/operators.py` 和 `docs/golden-status-deviation.md` 为准。
+
 ---
 
 ## 7. 对抗审查原则（测试策略）
