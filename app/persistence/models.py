@@ -66,6 +66,7 @@ class ReviewRunORM(Base):
     facts: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
     stage_records: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
     evidence_text_hashes: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, nullable=False)
+    evidence_locations: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

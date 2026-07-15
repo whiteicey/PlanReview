@@ -32,7 +32,10 @@ def _upgrade_schema(engine: Engine) -> None:
     """Apply additive SQLite columns required by newer local export metadata."""
     inspector = inspect(engine)
     required_columns = {
-        "review_runs": {"evidence_text_hashes": "JSON NOT NULL DEFAULT '{}'"},
+        "review_runs": {
+            "evidence_text_hashes": "JSON NOT NULL DEFAULT '{}'",
+            "evidence_locations": "JSON NOT NULL DEFAULT '{}'",
+        },
         "rule_results": {"rule_version": "VARCHAR(255)"},
     }
     with engine.begin() as connection:

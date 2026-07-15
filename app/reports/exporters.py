@@ -17,7 +17,7 @@ from app.settings import get_settings
 
 _FINDING_COLUMNS = (
     "finding_id", "origin", "category", "severity", "title", "description",
-    "suggestion", "evidence_span_ids", "review_status", "human_note",
+    "suggestion", "location", "evidence_span_ids", "review_status", "human_note",
 )
 _HASH_RE = re.compile(r"[0-9a-f]{64}\Z")
 _SAFE_LABEL = re.compile(r"[A-Za-z0-9_.:-]{1,128}\Z")
@@ -25,6 +25,16 @@ _ALLOWED_CATEGORIES = frozenset({
     "capacity", "completeness", "consistency", "version-change", "traceability",
     "unknown", "other",
 })
+
+
+def _finding_locations(run: ReviewRun, item) -> str:
+    """Readable source locations for a finding's evidence spans."""
+    seen: list[str] = []
+    for span_id in item.evidence_span_ids:
+        location = run.evidence_locations.get(span_id)
+        if location and location not in seen:
+            seen.append(location)
+    return "；".join(seen)
 
 
 def _rows(run: ReviewRun) -> list[dict[str, str | None]]:
@@ -38,6 +48,7 @@ def _rows(run: ReviewRun) -> list[dict[str, str | None]]:
             "title": item.title,
             "description": item.description,
             "suggestion": item.suggestion,
+            "location": _finding_locations(run, item),
             "evidence_span_ids": ", ".join(item.evidence_span_ids),
             "review_status": item.review_status.value,
             "human_note": item.human_note,
@@ -77,6 +88,8 @@ def export_word(run: ReviewRun, target: Path) -> Path:
         )
         document.add_paragraph(item.description)
         document.add_paragraph(f"建议：{item.suggestion}")
+        location = _finding_locations(run, item)
+        document.add_paragraph(f"问题位置：{location or '未定位'}")
         document.add_paragraph(f"证据 span：{', '.join(item.evidence_span_ids) or '无'}")
         if item.human_note:
             document.add_paragraph(f"专家备注：{item.human_note}")
