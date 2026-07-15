@@ -32,4 +32,21 @@ button{border:0;background:var(--clay);color:#fff;font:inherit}
 .row{display:flex;gap:12px;margin:6px 0;font-size:15px;line-height:1.6}
 .row .key{flex:0 0 76px;color:var(--muted);font-weight:600}
 
-@media(max-width:640px){main{margin:0;padding:24px 18px}.row{flex-direction:column;gap:2px}.row .key{flex:none}}
+.ruleset-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 20px}
+.ruleset-bar button{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:999px;padding:9px 18px;font:inherit;cursor:pointer}
+.ruleset-status{font-size:14px;color:var(--muted)}
+.ruleset-status.ok{color:var(--low)}
+.ruleset-status.warn{color:#8a6d1f}
+
+.review-state{margin-left:auto;color:var(--muted)}
+.review-state b{color:var(--ink)}
+.finding-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+.finding-actions label{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.finding-actions select{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#fff}
+.finding-actions textarea{flex:1 1 240px;min-height:38px;font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--line);resize:vertical}
+.finding-actions button{border:0;background:var(--clay);color:#fff;border-radius:999px;padding:9px 18px;font:inherit;cursor:pointer}
+.save-hint{font-size:13px;color:var(--muted)}
+.save-hint.ok{color:var(--low)}
+.save-hint.err{color:var(--high)}
+
+@media(max-width:640px){main{margin:0;padding:24px 18px}.row{flex-direction:column;gap:2px}.row .key{flex:none}.review-state{margin-left:0}}

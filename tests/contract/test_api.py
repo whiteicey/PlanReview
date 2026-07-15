@@ -90,6 +90,66 @@ def test_upload_review_findings_patch_and_exports(monkeypatch, tmp_path):
             assert all(value.startswith("evidence-") for value in anonymous["findings"][0]["evidence_span_ids"])
 
 
+def test_expert_review_updates_status_and_note_without_overwriting_original(monkeypatch, tmp_path):
+    client = client_for(monkeypatch, tmp_path)
+    upload = client.post(
+        "/api/cases",
+        files={"file": ("方案.docx", docx_bytes(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    )
+    case_id = upload.json()["case_id"]
+    client.post(f"/api/cases/{case_id}/review")
+    finding = client.get(f"/api/cases/{case_id}/findings").json()[0]
+    original = {k: finding[k] for k in ("title", "description", "suggestion", "severity", "category")}
+
+    rejected = client.patch(
+        f"/api/findings/{finding['finding_id']}",
+        json={"case_id": case_id, "review_status": "rejected", "human_note": "口径一致，非真实冲突"},
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["review_status"] == "rejected"
+    assert rejected.json()["human_note"] == "口径一致，非真实冲突"
+
+    resolved = client.patch(
+        f"/api/findings/{finding['finding_id']}",
+        json={"case_id": case_id, "review_status": "resolved", "human_note": None},
+    )
+    assert resolved.status_code == 200
+    body = resolved.json()
+    assert body["review_status"] == "resolved"
+    # The original AI finding text must never be overwritten by expert review.
+    for key, value in original.items():
+        assert body[key] == value
+
+
+def test_expert_review_rejects_invalid_status_secret_note_and_unknown_finding(monkeypatch, tmp_path):
+    client = client_for(monkeypatch, tmp_path)
+    upload = client.post(
+        "/api/cases",
+        files={"file": ("方案.docx", docx_bytes(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    )
+    case_id = upload.json()["case_id"]
+    client.post(f"/api/cases/{case_id}/review")
+    finding_id = client.get(f"/api/cases/{case_id}/findings").json()[0]["finding_id"]
+
+    invalid = client.patch(
+        f"/api/findings/{finding_id}",
+        json={"case_id": case_id, "review_status": "definitely-not-a-status"},
+    )
+    assert invalid.status_code == 422
+
+    secret = client.patch(
+        f"/api/findings/{finding_id}",
+        json={"case_id": case_id, "review_status": "confirmed", "human_note": "api_key=sk-abcdefghijklmnop"},
+    )
+    assert secret.status_code == 422
+
+    unknown = client.patch(
+        "/api/findings/does-not-exist",
+        json={"case_id": case_id, "review_status": "confirmed"},
+    )
+    assert unknown.status_code == 404
+
+
 def test_upload_is_uuid_isolated_and_same_names_do_not_overwrite(monkeypatch, tmp_path):
     client = client_for(monkeypatch, tmp_path)
     first = client.post("/api/cases", files={"file": ("same.docx", docx_bytes("first"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")})

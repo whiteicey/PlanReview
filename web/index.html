@@ -12,6 +12,10 @@
     <h1>开发方案审查助手</h1>
     <p class="lede">用可追溯的证据链完成文本型 DOCX 形式初审。</p>
     <div class="notice">AI 初审结果，不是正式审查结论</div>
+    <div class="ruleset-bar">
+      <button type="button" id="reload-ruleset">加载 / 重新加载规则库</button>
+      <span id="ruleset-status" class="ruleset-status">正在检查规则库…</span>
+    </div>
     <form id="upload">
       <label class="file-picker" for="file">选择 DOCX<input id="file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></label>
       <button type="submit">上传并开始</button>
