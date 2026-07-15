@@ -16,6 +16,31 @@
       <button type="button" id="reload-ruleset">加载 / 重新加载规则库</button>
       <span id="ruleset-status" class="ruleset-status">正在检查规则库…</span>
     </div>
+    <details class="llm-config">
+      <summary>AI 复核设置（可选）</summary>
+      <div class="llm-config-body">
+        <label>复核方式
+          <select id="llm-provider">
+            <option value="mock">内置 Mock（默认，不联网）</option>
+            <option value="anthropic">在线 LLM（Anthropic 格式）</option>
+          </select>
+        </label>
+        <label>Base URL
+          <input id="llm-base-url" type="text" placeholder="https://api.deepseek.com/anthropic">
+        </label>
+        <label>模型
+          <input id="llm-model" type="text" placeholder="deepseek-chat">
+        </label>
+        <label>API Key
+          <input id="llm-api-key" type="password" placeholder="仅在此填写，保存后不再显示">
+        </label>
+        <div class="llm-config-actions">
+          <button type="button" id="llm-save">保存配置</button>
+          <button type="button" id="llm-test">测试连接</button>
+          <span id="llm-config-status" class="llm-config-status"></span>
+        </div>
+      </div>
+    </details>
     <form id="upload">
       <label class="file-picker" for="file">选择 DOCX<input id="file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></label>
       <button type="submit">上传并开始</button>

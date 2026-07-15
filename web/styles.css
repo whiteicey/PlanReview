@@ -38,6 +38,22 @@ button{border:0;background:var(--clay);color:#fff;font:inherit}
 .ruleset-status.ok{color:var(--low)}
 .ruleset-status.warn{color:#8a6d1f}
 
+.llm-config{margin:0 0 20px;border:1px solid var(--line);border-radius:14px;background:#fff;padding:6px 16px}
+.llm-config summary{cursor:pointer;font-weight:600;color:var(--muted);padding:8px 0}
+.llm-config-body{display:flex;flex-direction:column;gap:12px;padding:8px 0 14px}
+.llm-config-body label{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--muted)}
+.llm-config-body input,.llm-config-body select{font:inherit;padding:9px 11px;border-radius:8px;border:1px solid var(--line);background:#fff}
+.llm-config-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.llm-config-actions button{border:0;background:var(--clay);color:#fff;border-radius:999px;padding:9px 18px;font:inherit;cursor:pointer}
+.llm-config-actions #llm-test{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.llm-config-status{font-size:13px;color:var(--muted)}
+.llm-config-status.ok{color:var(--low)}
+.llm-config-status.err{color:var(--high)}
+
+.export-bar{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 8px}
+.export-btn{text-decoration:none;background:var(--clay);color:#fff;border-radius:999px;padding:9px 18px;font-size:14px}
+.export-btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+
 .review-state{margin-left:auto;color:var(--muted)}
 .review-state b{color:var(--ink)}
 .finding-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}

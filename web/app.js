@@ -79,6 +79,70 @@ document.querySelector("#reload-ruleset").addEventListener("click", async () => 
   }
 });
 
+// --- LLM config -----------------------------------------------------------
+
+const llmConfigStatus = document.querySelector("#llm-config-status");
+
+async function loadLlmConfig() {
+  try {
+    const response = await fetch("/api/llm/config");
+    if (!response.ok) return;
+    const config = await response.json();
+    document.querySelector("#llm-provider").value = config.provider || "mock";
+    document.querySelector("#llm-base-url").value = config.base_url || "";
+    document.querySelector("#llm-model").value = config.model || "";
+    llmConfigStatus.textContent = config.key_present ? "已配置密钥 ✓" : "未配置密钥";
+    llmConfigStatus.className = "llm-config-status" + (config.key_present ? " ok" : "");
+  } catch (error) {
+    /* leave defaults */
+  }
+}
+
+document.querySelector("#llm-save").addEventListener("click", async () => {
+  const apiKeyEl = document.querySelector("#llm-api-key");
+  const payload = {
+    provider: document.querySelector("#llm-provider").value,
+    base_url: document.querySelector("#llm-base-url").value || null,
+    model: document.querySelector("#llm-model").value || null,
+    api_key: apiKeyEl.value || null,
+  };
+  llmConfigStatus.textContent = "保存中…";
+  llmConfigStatus.className = "llm-config-status";
+  try {
+    const response = await fetch("/api/llm/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      llmConfigStatus.textContent = body.detail || "保存失败";
+      llmConfigStatus.className = "llm-config-status err";
+      return;
+    }
+    apiKeyEl.value = "";
+    llmConfigStatus.textContent = body.key_present ? "已保存，密钥已配置 ✓" : "已保存";
+    llmConfigStatus.className = "llm-config-status ok";
+  } catch (error) {
+    llmConfigStatus.textContent = "无法连接本地服务";
+    llmConfigStatus.className = "llm-config-status err";
+  }
+});
+
+document.querySelector("#llm-test").addEventListener("click", async () => {
+  llmConfigStatus.textContent = "正在测试连接…";
+  llmConfigStatus.className = "llm-config-status";
+  try {
+    const response = await fetch("/api/llm/health", { method: "POST" });
+    const body = await response.json().catch(() => ({}));
+    llmConfigStatus.textContent = body.detail || (body.ok ? "连接正常" : "连接失败");
+    llmConfigStatus.className = "llm-config-status " + (body.ok ? "ok" : "err");
+  } catch (error) {
+    llmConfigStatus.textContent = "无法连接本地服务";
+    llmConfigStatus.className = "llm-config-status err";
+  }
+});
+
 // --- Findings -------------------------------------------------------------
 
 function findingCard(finding) {
@@ -166,6 +230,12 @@ function renderResult(summary, findings) {
     parts.push(`<div class="summary-line">已应用 ${summary.rule_count} 条审查规则。</div>`);
   }
   parts.push(`<div class="summary-line">案例编号：${escapeHtml(summary.case_id)}　发现问题：${summary.finding_count} 条　提取参数：${summary.fact_count} 个</div>`);
+  parts.push(`
+    <div class="export-bar">
+      <a class="export-btn" href="/api/cases/${encodeURIComponent(summary.case_id)}/exports/xlsx">导出 Excel（含问题位置）</a>
+      <a class="export-btn" href="/api/cases/${encodeURIComponent(summary.case_id)}/exports/docx">导出 Word 报告</a>
+      <a class="export-btn ghost" href="/api/cases/${encodeURIComponent(summary.case_id)}/exports/anonymous">导出匿名包</a>
+    </div>`);
   if (!findings.length) {
     parts.push('<div class="empty">本次未发现规则可判定的问题。这并不代表方案完全正确，请仍由专家复核。</div>');
   } else {
@@ -208,3 +278,4 @@ document.querySelector("#upload").addEventListener("submit", async (event) => {
 });
 
 refreshRulesetStatus();
+loadLlmConfig();
