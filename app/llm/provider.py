@@ -14,6 +14,12 @@ import re
 from typing import Any, Protocol
 
 _REDACTED = "[REDACTED]"
+
+
+class LLMProviderError(RuntimeError):
+    """An online provider call failed without exposing key or request body."""
+
+
 _SAFE_FLOAT_OPTION_KEYS = frozenset(
     {"temperature", "top_p", "presence_penalty", "frequency_penalty"}
 )

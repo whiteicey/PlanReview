@@ -10,7 +10,7 @@ from app.domain.schemas import Finding, ParameterFact, RuleDefinition, RuleResul
 from app.extraction.normalization import normalize_facts_units
 from app.extraction.parameters import extract_parameter_facts
 from app.extraction.terminology import TerminologyMap, normalize_facts
-from app.llm.provider import LLMProvider, LLMRequest, validate_findings
+from app.llm.provider import LLMProvider, LLMProviderError, LLMRequest, validate_findings
 from app.parsers.docx_parser import ParsedDocument
 from app.pipeline import StageRunner
 from app.review.reconcile import merge_findings, rule_results_to_findings
@@ -29,6 +29,9 @@ class ReviewRun:
     final_status: str = "PENDING"
     # Retain only evidence hashes for anonymous exports; source span text is not kept.
     evidence_text_hashes: dict[str, str] = field(default_factory=dict)
+    # Set when an online LLM review could not be completed (fail-closed): the
+    # rule results are unaffected, but the client is told the AI pass was skipped.
+    llm_review_error: str | None = None
 
 
 class ReviewPipeline:
@@ -77,14 +80,21 @@ class ReviewPipeline:
             state.rule_results = RuleEngine().evaluate(rules, state.facts, spans)
 
         def llm_reviewed() -> None:
-            response = provider.review(
-                LLMRequest(
-                    model="mock",
-                    system_prompt="只输出结构化复核意见",
-                    user_content="\n".join(span.text for span in spans),
-                    evidence_span_ids=[span.span_id for span in spans],
+            try:
+                response = provider.review(
+                    LLMRequest(
+                        model="mock",
+                        system_prompt="只输出结构化复核意见",
+                        user_content="\n".join(span.text for span in spans),
+                        evidence_span_ids=[span.span_id for span in spans],
+                    )
                 )
-            )
+            except LLMProviderError as exc:
+                # An online provider failed (network/timeout/refusal/bad output).
+                # Fail closed: keep the rule findings, skip the AI contribution,
+                # and record that the AI pass did not complete.
+                state.llm_review_error = str(exc)
+                return
             try:
                 validated = validate_findings(
                     response.findings, [span.span_id for span in spans]

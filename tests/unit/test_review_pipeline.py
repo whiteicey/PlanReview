@@ -57,3 +57,25 @@ def test_pipeline_retains_facts_and_reaches_human_review_only_after_success() ->
         PipelineStage.READY_FOR_HUMAN_REVIEW,
     ]
     assert run.final_status == "READY_FOR_HUMAN_REVIEW"
+
+
+class _FailingProvider:
+    def review(self, request):  # noqa: ANN001, ANN201 - test double
+        from app.llm.provider import LLMProviderError
+
+        raise LLMProviderError("LLM 请求失败：ConnectError")
+
+
+def test_pipeline_tolerates_online_llm_failure_and_keeps_rule_findings() -> None:
+    run = ReviewPipeline().run("case-2", [document()], [rule()], _FailingProvider())
+
+    # The review still completes and the rule finding survives; only the LLM
+    # contribution is skipped (fail-closed, never a silent crash or lost rules).
+    assert run.final_status == "READY_FOR_HUMAN_REVIEW"
+    assert run.rule_results[0].rule_id == "R1"
+    assert any(finding.rule_id == "R1" for finding in run.findings)
+    assert all(finding.origin.value != "llm" for finding in run.findings)
+    stages = [record.stage for record in run.stage_records]
+    assert PipelineStage.RECONCILED in stages
+    assert PipelineStage.READY_FOR_HUMAN_REVIEW in stages
+

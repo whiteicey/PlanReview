@@ -115,3 +115,32 @@ def validate_base_url(url: str, allowlist: set[str] | None = None) -> str:
     if allowlist is not None and normalized_host not in _normalized_allowlist(allowlist):
         raise ReviewError(_ALLOWLIST_ERROR)
     return url
+
+
+def validate_llm_base_url(url: str) -> str:
+    """Validate a user-configured LLM base URL with relaxed, desensitized-data rules.
+
+    The review data is desensitized before upload, and the LLM endpoint is an
+    explicitly configured gateway (often on an internal network), so this
+    deliberately permits http, private/loopback hosts, and non-default ports —
+    unlike :func:`validate_base_url`. It still fails closed on non-http(s)
+    schemes, missing hosts, embedded credentials, and URL fragments so a
+    malformed or credential-bearing value cannot slip through.
+    """
+    if not isinstance(url, str) or not url:
+        _reject()
+    try:
+        parsed = urlsplit(url)
+        parsed.port  # noqa: B018 - triggers ValueError on a malformed port
+    except ValueError:
+        _reject()
+    if (
+        parsed.scheme.casefold() not in ("http", "https")
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+        or parsed.hostname is None
+    ):
+        _reject()
+    return url
