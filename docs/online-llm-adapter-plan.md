@@ -1,10 +1,7 @@
-# 在线 LLM 真适配器 —— 设计方案（待审阅，未实现）
+# 在线 LLM 真适配器 —— 设计方案
 
-> 状态：**只出设计，尚未写实现代码**。对应设计文档
-> `2026-07-14-review-assistant-kernel-design.md` §1.2「在线 LLM（Anthropic / OpenAI 真适配器）——
-> 本次用 Mock」与 §9。请审阅本方案后再决定是否落地。
->
-> ⚠️ 本功能触及 **API 密钥 + 外网请求 + SSRF + 提示注入**，落地前必须走一次 `/security-review`。
+> 状态：**已实现（2026-07-15）**。本文档为原始设计方案，实际落地与之基本一致，差异见文末「实现说明」。
+> 对应设计文档 `2026-07-14-review-assistant-kernel-design.md` §1.2 与 §9。
 
 ---
 
@@ -127,3 +124,21 @@ finding 走匿名导出后，zip 内不含 provider 名、model、base_url、req
 - **涉密红线**：一旦启用在线 LLM，方案正文会离开本机发往厂商——使用手册和页面都要**醒目提示**，涉密方案禁止启用。
 - **成本/限流**：真适配器要有超时与失败重试上限，避免卡死或刷量。
 - 建议先只做 **OpenAI 兼容**（可指向内网/私有部署网关，数据不出内网），Anthropic 直连作为第二步，更符合油气行业数据合规。
+
+---
+
+## 实现说明（2026-07-15 落地情况）
+
+实际实现与本方案基本一致，差异如下：
+- **只做 Anthropic 格式**（用户决定），未做 OpenAI 分支。适配器直连 REST（`{base_url}/v1/messages`，
+  header `x-api-key`+`anthropic-version`），不依赖 anthropic SDK。见 `app/llm/adapters/anthropic.py`。
+- **返回格式**用「prompt 要求 JSON + 容错解析」（提取 markdown 围栏 / 首个 JSON 数组），非 tool_use。
+- **网络限制放宽**（用户明确：数据已脱敏）：新增 `validate_llm_base_url`（允许 http/内网/自定义端口），
+  严格版 `validate_base_url` 保留未动。
+- **角色沿用原方案**：LLM 是独立第二审查来源（pipeline `llm_reviewed` 阶段），不是「复审规则结果」。
+- **fail-closed**：`AnthropicAdapter` 抛 `LLMProviderError`，pipeline 捕获后记 `run.llm_review_error`、
+  保留规则结果、不崩。
+- 配置：`app/llm/config_store.py`（非密钥配置存 `storage/llm_config.json`，key 走 keyring），
+  端点 `GET/POST /api/llm/config`、`POST /api/llm/health`，默认 base_url = DeepSeek 的 Anthropic 网关。
+- 前端：页面「AI 复核设置（可选）」折叠区 + 「测试连接」。
+- 测试全部 mock httpx，不联网；`/security-review` 仍建议在正式启用前再跑一次。
