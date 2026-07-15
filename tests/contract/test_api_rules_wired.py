@@ -97,3 +97,44 @@ def test_review_degrades_when_ruleset_not_configured(monkeypatch, tmp_path):
     findings = client.get(f"/api/cases/{case_id}/findings").json()
     # Degraded path still runs the Mock LLM, but no rule-derived findings.
     assert all(f["rule_id"] is None for f in findings)
+
+
+def test_ruleset_status_and_reload_endpoints(monkeypatch, tmp_path):
+    loaded = _load_real_ruleset()
+    from app.api import routes
+
+    # Start from an empty cache so status reflects reload behaviour, not import order.
+    routes._reset_ruleset_cache()
+    monkeypatch.setattr(routes, "load_active_ruleset", lambda root=None: loaded)
+    client = _client(monkeypatch, tmp_path)
+
+    reload_response = client.post("/api/ruleset/reload", json={})
+    assert reload_response.status_code == 200
+    body = reload_response.json()
+    assert body["loaded"] is True
+    assert body["rule_count"] == len(loaded.rules)
+    assert body["root"]
+
+    status = client.get("/api/ruleset").json()
+    assert status["loaded"] is True
+    assert status["rule_count"] == len(loaded.rules)
+
+
+def test_ruleset_reload_reports_unconfigured_without_500(monkeypatch, tmp_path):
+    from app.api import routes
+    from app.rules.ruleset import RulesetNotConfigured
+
+    routes._reset_ruleset_cache()
+
+    def _raise(root=None):
+        raise RulesetNotConfigured("找不到示例数据包")
+
+    monkeypatch.setattr(routes, "load_active_ruleset", _raise)
+    client = _client(monkeypatch, tmp_path)
+
+    reload_response = client.post("/api/ruleset/reload", json={})
+    assert reload_response.status_code == 200
+    body = reload_response.json()
+    assert body["loaded"] is False
+    assert body["rule_count"] == 0
+    assert body["root"] is None

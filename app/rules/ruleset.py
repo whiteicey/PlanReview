@@ -51,6 +51,24 @@ class LoadedRuleset:
     terminology: TerminologyMap
 
 
+def _first_bundle_with_sentinel(starts: list[Path]) -> Path | None:
+    """Return the first ``本地版示例数据包`` dir under a start path that actually
+    contains the ruleset file, or None.
+
+    Gating on the sentinel ``rules/ruleset-demo-0.1.yaml`` (not merely the folder
+    name) avoids picking up an unrelated same-named directory.
+    """
+    seen: set[Path] = set()
+    for start in starts:
+        if start in seen:
+            continue
+        seen.add(start)
+        candidate = start / "本地版示例数据包"
+        if (candidate / _RULESET_RELATIVE).is_file():
+            return candidate.resolve()
+    return None
+
+
 def resolve_ruleset_root() -> Path:
     """Resolve ``本地版示例数据包`` using only the documented locations."""
     configured = os.environ.get("REVIEW_DEMO_ROOT")
@@ -60,15 +78,16 @@ def resolve_ruleset_root() -> Path:
             return candidate.resolve()
         raise RulesetNotConfigured(f"REVIEW_DEMO_ROOT 不存在或不是目录: {candidate}")
 
-    candidates = (
-        _REPO_ROOT.parent / "本地版示例数据包",
-        Path.cwd().parent / "本地版示例数据包",
-    )
-    for candidate in candidates:
-        if candidate.is_dir():
-            return candidate.resolve()
-    rendered = "、".join(str(path) for path in candidates)
-    raise RulesetNotConfigured("找不到示例数据包；请设置 REVIEW_DEMO_ROOT。已检查: " + rendered)
+    # Walk the ancestors of both the installed package and the working directory
+    # so the bundle is found whether the app runs from the repo root or a nested
+    # git worktree (where the bundle sits several levels above the repo root).
+    cwd = Path.cwd()
+    search_starts = [_REPO_ROOT, *_REPO_ROOT.parents, cwd, *cwd.parents]
+    found = _first_bundle_with_sentinel(search_starts)
+    if found is not None:
+        return found
+    rendered = "、".join(str(start / "本地版示例数据包") for start in (_REPO_ROOT, cwd))
+    raise RulesetNotConfigured("找不到示例数据包；请设置 REVIEW_DEMO_ROOT。已检查其祖先目录，例如: " + rendered)
 
 
 def _read_yaml(path: Path, label: str) -> dict[str, Any]:

@@ -63,4 +63,18 @@ class DeleteCaseRequest(BaseModel):
     confirmation: str = Field(min_length=1, max_length=200)
 
 
+class RulesetStatus(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    loaded: bool
+    rule_count: int
+    root: str | None = None
+
+
+class RulesetReloadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    root: str | None = Field(default=None, max_length=1024)
+
+
 ExportFormat = Literal["xlsx", "docx", "anonymous"]

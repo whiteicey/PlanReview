@@ -15,6 +15,8 @@ from app.api.schemas import (
     FindingResponse,
     FindingReviewUpdate,
     ReviewSummary,
+    RulesetReloadRequest,
+    RulesetStatus,
 )
 from app.domain.exceptions import ParseError, PathTraversalError, UnsupportedFileTypeError
 from app.llm.mock import MockProvider
@@ -31,17 +33,48 @@ from app.storage.paths import safe_join, validate_upload_name
 
 router = APIRouter(prefix="/api", tags=["local review"])
 
+# In-process cache of the active ruleset. ``_loaded`` distinguishes "never
+# attempted" from "attempted and found nothing", so the lazy load runs once.
+_RULESET_CACHE: LoadedRuleset | None = None
+_RULESET_ATTEMPTED = False
+
+
+def _reset_ruleset_cache() -> None:
+    """Clear the cached ruleset (used by reload and tests)."""
+    global _RULESET_CACHE, _RULESET_ATTEMPTED
+    _RULESET_CACHE = None
+    _RULESET_ATTEMPTED = False
+
+
+def _load_ruleset_into_cache(root: Path | None = None) -> LoadedRuleset | None:
+    """Attempt to load the ruleset and record the result in the cache."""
+    global _RULESET_CACHE, _RULESET_ATTEMPTED
+    try:
+        _RULESET_CACHE = load_active_ruleset(root) if root is not None else load_active_ruleset()
+    except RulesetError:
+        _RULESET_CACHE = None
+    _RULESET_ATTEMPTED = True
+    return _RULESET_CACHE
+
 
 def _active_ruleset() -> LoadedRuleset | None:
-    """Load the active rule set, or None when none is configured/valid.
+    """Return the cached active rule set, loading it once on first use.
 
     The review path degrades to an LLM-only pass rather than failing when no
     ruleset is available; the response tells the client this happened.
     """
-    try:
-        return load_active_ruleset()
-    except RulesetError:
-        return None
+    if not _RULESET_ATTEMPTED:
+        return _load_ruleset_into_cache()
+    return _RULESET_CACHE
+
+
+def _ruleset_status() -> RulesetStatus:
+    loaded = _active_ruleset()
+    return RulesetStatus(
+        loaded=loaded is not None,
+        rule_count=len(loaded.rules) if loaded else 0,
+        root=str(loaded.root) if loaded else None,
+    )
 
 
 def _case_id(value: str) -> str:
@@ -104,6 +137,25 @@ def config() -> dict[str, object]:
         "max_pages": settings.max_pages,
         "disclaimer": settings.disclaimer,
     }
+
+
+@router.get("/ruleset", response_model=RulesetStatus)
+def ruleset_status() -> RulesetStatus:
+    return _ruleset_status()
+
+
+@router.post("/ruleset/reload", response_model=RulesetStatus)
+def reload_ruleset(request: RulesetReloadRequest) -> RulesetStatus:
+    """Load or reload the active ruleset.
+
+    Fail-closed and honest: a missing/invalid ruleset returns a normal 200 with
+    ``loaded: false`` rather than a 500, and no raw exception text (which could
+    include a filesystem path) is echoed to the client.
+    """
+    _reset_ruleset_cache()
+    root = Path(request.root) if request.root else None
+    _load_ruleset_into_cache(root)
+    return _ruleset_status()
 
 
 @router.post("/cases", status_code=status.HTTP_201_CREATED, response_model=CaseCreated)

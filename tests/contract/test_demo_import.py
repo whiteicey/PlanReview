@@ -40,10 +40,18 @@ def test_demo_docs_state_docx_scope():
     assert "DEMO_ONLY" in text
 
 
-def test_demo_root_uses_only_explicit_resolution(monkeypatch, tmp_path: Path):
+def test_demo_root_prefers_env_override(monkeypatch, tmp_path: Path):
     module = _load_import_demo()
-    monkeypatch.delenv("REVIEW_DEMO_ROOT", raising=False)
-    monkeypatch.chdir(tmp_path)
+    bundle = tmp_path / "本地版示例数据包"
+    (bundle / "rules").mkdir(parents=True)
+    (bundle / "rules" / "ruleset-demo-0.1.yaml").write_text("rules: []\n", encoding="utf-8")
+    monkeypatch.setenv("REVIEW_DEMO_ROOT", str(bundle))
+    assert module.resolve_demo_root() == bundle.resolve()
+
+
+def test_demo_root_env_override_missing_dir_raises(monkeypatch, tmp_path: Path):
+    module = _load_import_demo()
+    monkeypatch.setenv("REVIEW_DEMO_ROOT", str(tmp_path / "missing"))
     with pytest.raises(module.DemoRootNotFound, match="REVIEW_DEMO_ROOT"):
         module.resolve_demo_root()
 
