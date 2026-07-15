@@ -75,6 +75,58 @@ def test_facts_round_trip_with_source_document_in_fresh_session(tmp_path):
     assert loaded.facts[0].source_span_id == "span-1"
 
 
+def test_facts_with_chinese_domain_vocabulary_persist(tmp_path):
+    # Real extracted facts use Chinese canonical names and scope labels; these
+    # must persist, not be rejected as unsafe identifiers.
+    db = tmp_path / "review.db"
+    fact = ParameterFact(
+        fact_id="fact-cap",
+        canonical_name="高峰产量",
+        raw_name="高峰产量",
+        raw_value="230",
+        normalized_value=2_300_000.0,
+        raw_unit="万m³/d",
+        canonical_unit="m^3/day",
+        subject="气田_A",
+        time_scope="达产期",
+        statistical_scope="设计工况",
+        condition="峰值",
+        source_document="方案.docx",
+        source_version="V1.0",
+        source_span_id="DEMO:t:1:1:1",
+        extraction_method=ExtractionMethod.TABLE,
+    )
+    ReviewRepository(create_session(db)).save_run(ReviewRun("CASE-cn", facts=[fact]))
+    loaded = ReviewRepository(create_session(db)).get_run("CASE-cn")
+    assert loaded is not None
+    stored = loaded.facts[0]
+    assert stored.canonical_name == "高峰产量"
+    assert stored.subject == "气田_A"
+    assert stored.time_scope == "达产期"
+    assert stored.statistical_scope == "设计工况"
+    assert stored.condition == "峰值"
+    assert stored.raw_unit == "万m³/d"
+
+
+def test_facts_with_control_chars_or_path_in_vocabulary_are_rejected(tmp_path):
+    # The relaxed validator still fails closed on control characters and
+    # secret-like content in persisted vocabulary metadata. A slash is allowed
+    # because units legitimately contain it (万m³/d), so it is not tested here.
+    db = tmp_path / "review.db"
+    for bad in ("高峰\n产量", "高峰\t产量", "api_key=sk-abcdefghijkl"):
+        fact = ParameterFact(
+            fact_id="fact-bad",
+            canonical_name=bad,
+            raw_name="x",
+            raw_value="1",
+            source_document="方案.docx",
+            source_span_id="span-1",
+            extraction_method=ExtractionMethod.REGEX,
+        )
+        with pytest.raises(ValueError):
+            ReviewRepository(create_session(db)).save_run(ReviewRun("CASE-bad", facts=[fact]))
+
+
 def test_save_run_is_idempotent_for_same_finding_id(tmp_path):
     db = tmp_path / "review.db"
     repo = ReviewRepository(create_session(db))

@@ -470,16 +470,16 @@ def _facts_to_dict(values: list[ParameterFact]) -> list[dict[str, Any]]:
     return [
         {
             "fact_id": _safe_identifier(value.fact_id, "fact_id"),
-            "canonical_name": _safe_identifier(value.canonical_name, "canonical_name"),
+            "canonical_name": _safe_vocabulary(value.canonical_name, "canonical_name"),
             "raw_name": _safe_text(value.raw_name, "raw_name"),
             "raw_value": _safe_text(value.raw_value, "raw_value"),
             "normalized_value": value.normalized_value,
-            "raw_unit": _safe_identifier(value.raw_unit, "raw_unit", optional=True),
-            "canonical_unit": _safe_identifier(value.canonical_unit, "canonical_unit", optional=True),
-            "subject": _safe_identifier(value.subject, "subject", optional=True),
-            "time_scope": _safe_identifier(value.time_scope, "time_scope", optional=True),
-            "statistical_scope": _safe_identifier(value.statistical_scope, "statistical_scope", optional=True),
-            "condition": _safe_identifier(value.condition, "condition", optional=True),
+            "raw_unit": _safe_vocabulary(value.raw_unit, "raw_unit", optional=True),
+            "canonical_unit": _safe_vocabulary(value.canonical_unit, "canonical_unit", optional=True),
+            "subject": _safe_vocabulary(value.subject, "subject", optional=True),
+            "time_scope": _safe_vocabulary(value.time_scope, "time_scope", optional=True),
+            "statistical_scope": _safe_vocabulary(value.statistical_scope, "statistical_scope", optional=True),
+            "condition": _safe_vocabulary(value.condition, "condition", optional=True),
             "source_document": _safe_source_document(value.source_document),
             "source_version": _safe_identifier(value.source_version, "source_version", optional=True),
             "source_span_id": _safe_identifier(value.source_span_id, "source_span_id"),
@@ -518,6 +518,27 @@ def _safe_identifier(value: str | None, field_name: str, *, optional: bool = Fal
         return None
     if not isinstance(value, str) or not _SAFE_IDENTIFIER_RE.fullmatch(value):
         raise ValueError(f"{field_name} must be a bounded safe identifier")
+    return value
+
+
+def _safe_vocabulary(value: str | None, field_name: str, *, optional: bool = False) -> str | None:
+    """Validate a domain-vocabulary field (canonical name, scope, unit, …).
+
+    Unlike ``_safe_identifier`` these fields are legitimately non-ASCII human
+    terms (``高峰产量``, ``达产期``) and units that legitimately contain a slash
+    (``万m³/d`` = per day), so neither the ASCII-only identifier pattern nor a
+    path-separator ban fits.  These values are stored only as JSON payload, never
+    joined into a filesystem path, so the guard is: bounded length, no control
+    characters, and no secret/body content.
+    """
+    if value is None and optional:
+        return None
+    if not isinstance(value, str) or not 1 <= len(value) <= 255:
+        raise ValueError(f"{field_name} must be bounded vocabulary")
+    if any(ord(char) < 32 for char in value):
+        raise ValueError(f"{field_name} must not contain control characters")
+    if _contains_prohibited_content(value):
+        raise ValueError(f"{field_name} must not contain secret or body content")
     return value
 
 
