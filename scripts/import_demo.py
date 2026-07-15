@@ -189,9 +189,12 @@ def _load_production_rules(
         # Older generated demo bundles used ``suspected`` for missing data,
         # while the production enum deliberately uses UNKNOWN. Preserve intent
         # as metadata, but validate through the production three-value model.
+        # A ``suspected`` policy also means the external contract wants human
+        # escalation, expressed declaratively rather than by a rule-ID branch.
         if normalized.get("on_missing") == "suspected":
             params["demo_on_missing"] = "suspected"
             normalized["on_missing"] = "unknown"
+            normalized["requires_human_review"] = True
         if row.get("rule_id") == "VERSION-001":
             params["legacy_human_review"] = True
         normalized["params"] = params
@@ -229,6 +232,36 @@ def _load_production_terminology(path: Path) -> TerminologyMap:
             raise DemoImportError(f"术语校验失败: {exc}") from exc
 
 
+def _load_repo_rules(terminology: TerminologyMap) -> list[RuleDefinition]:
+    """Load repo-owned generic rules and inject terminology-derived params.
+
+    These rules are authored by this project (not the external authoritative
+    bundle) to express generic checks the 10-rule DEMO set does not cover. The
+    ``prose_alias_unnormalized`` rule receives its alias vocabulary from the
+    loaded terminology map — the same explicit config-injection pattern used for
+    ``alias_normalization`` — so no alias names are hardcoded in this module.
+    """
+    repo_path = Path(__file__).resolve().parents[1] / "app" / "rules" / "repo_rules.yaml"
+    try:
+        rules = load_rules(repo_path)
+    except RuleLoadError as exc:
+        raise DemoImportError(f"仓库规则校验失败: {exc}") from exc
+    terms = [
+        {
+            "canonical": canonical,
+            "aliases": sorted(alias for alias in aliases if alias != canonical),
+        }
+        for canonical, aliases in terminology.canonical_to_aliases.items()
+    ]
+    injected: list[RuleDefinition] = []
+    for rule in rules:
+        if rule.operator == "prose_alias_unnormalized":
+            injected.append(rule.model_copy(update={"params": {**rule.params, "terms": terms}}))
+        else:
+            injected.append(rule)
+    return injected
+
+
 def import_demo(source_docx: Path, *, storage_root: Path | None = None) -> DemoImport:
     """Load production-validated demo rules and terminology without file copying."""
     del storage_root
@@ -244,7 +277,11 @@ def import_demo(source_docx: Path, *, storage_root: Path | None = None) -> DemoI
         source_docx=source,
         rules_path=rules_path,
         terminology_path=terminology_path,
-        rules=_load_production_rules(rules_path, terminology) + compatibility_rules,
+        rules=(
+            _load_production_rules(rules_path, terminology)
+            + _load_repo_rules(terminology)
+            + compatibility_rules
+        ),
         terminology=terminology,
     )
 

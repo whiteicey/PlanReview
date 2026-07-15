@@ -1,0 +1,29 @@
+rules:
+  - rule_id: COMPLETENESS-003
+    version: 0.1.0-repo
+    name: 审查意见回复表状态完整
+    category: completeness
+    severity: medium
+    operator: reply_table_status_complete
+    on_missing: unknown
+    source_type: DEMO_ONLY
+    enabled: true
+    params:
+      section_contains: 审查意见回复表
+      id_header_terms:
+        - 意见编号
+        - 意见
+      status_header_terms:
+        - 回复
+        - 状态
+  - rule_id: TERM-002
+    version: 0.1.0-repo
+    name: 正文参数别名未归一
+    category: terminology
+    severity: low
+    operator: prose_alias_unnormalized
+    on_missing: unknown
+    source_type: DEMO_ONLY
+    enabled: true
+    params:
+      terms: []
