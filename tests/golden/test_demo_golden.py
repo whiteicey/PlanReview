@@ -118,4 +118,6 @@ def test_g009_category_summary_comes_from_corpus_and_is_reproducible(
     assert first == second
     assert sum(first.values()) >= expected_cases["G-009"]["minimum_finding_count"]
     assert expected <= set(first)
-    assert all(isinstance(count, int) and count >= 0 for count in first.values())
+    # Every expected category must be backed by at least one real finding, not
+    # merely present as a zero-count key.
+    assert all(first[category] >= 1 for category in expected)

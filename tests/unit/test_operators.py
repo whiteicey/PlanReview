@@ -198,6 +198,14 @@ def test_change_requires_reason_has_pass_fail_unknown_and_scope_matching() -> No
     single = fact("only", "建设周期", 24, span_id="only", source_version="v1")
     assert run("change_requires_reason", [single], params=params).status is RuleStatus.PASS
     assert run("change_requires_reason", [single, fact("only2", "建设周期", 24, span_id="only2", source_version="v1")], params=params).status is RuleStatus.PASS
+    # A second version present only as an INCOMPLETE fact must not be silently
+    # dropped into a single-version PASS: that would mask a possible change.
+    incomplete_v2 = fact("v2", "建设周期", 30, span_id="v2", source_version="v2", time_scope=None)
+    assert run("change_requires_reason", [single, incomplete_v2], params=params).status is RuleStatus.UNKNOWN
+    # A versionless (incomplete) second fact alongside one complete version is
+    # likewise ambiguous, not a clean single-version PASS.
+    versionless = fact("nov", "建设周期", 30, span_id="nov", source_version=None, time_scope=None)
+    assert run("change_requires_reason", [single, versionless], params=params).status is RuleStatus.UNKNOWN
     # No usable facts at all remains UNKNOWN.
     assert run("change_requires_reason", [], params=params).status is RuleStatus.UNKNOWN
 

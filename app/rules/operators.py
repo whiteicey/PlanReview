@@ -319,20 +319,28 @@ def change_requires_reason(context: OperatorContext, params: dict[str, Any]) -> 
     if dimensions is None:
         return _unknown("比较维度配置无效")
     facts = _named_facts(context, parameter)
-    usable = [fact for fact in facts if _usable([fact]) and fact.source_version is not None]
-    if not usable:
-        return _unknown("缺少完整且带版本的参数事实", facts)
-    if len({fact.source_version for fact in usable}) < 2:
-        # A single-version document has no cross-version change to explain, but
-        # only when that version resolves to one consistent value; conflicting
-        # single-version values are an intra-version ambiguity, not this rule.
+    if not facts:
+        return _unknown("缺少参数事实", facts)
+    # Consider the version of every occurrence, complete or not. A versionless
+    # fact is ambiguous — it may be an uncaptured second version — so fail closed.
+    if any(fact.source_version is None for fact in facts):
+        return _unknown("存在缺版本的参数事实", facts)
+    versions = {fact.source_version for fact in facts}
+    if len(versions) < 2:
+        # Genuinely a single-version document: any extra occurrences are
+        # same-version duplicates, not a hidden change. PASS only when the
+        # version resolves to one consistent value across usable facts.
+        usable = [fact for fact in facts if _usable([fact])]
+        if not usable:
+            return _unknown("缺少完整的单版本参数事实", facts)
         if len({fact.normalized_value for fact in usable}) == 1:
             return _outcome(RuleStatus.PASS, "无跨版本变更", usable)
         return _unknown("单版本内存在未消解冲突", usable)
+    # Multiple versions present: the comparison requires every fact complete,
+    # same-scope, and exactly one fact per distinct version.
     if len(facts) < 2 or not _usable(facts) or not _same_dimensions(facts, dimensions):
         return _unknown("缺少完整且同范围的版本事实", facts)
-    versions = {fact.source_version for fact in facts}
-    if None in versions or len(versions) != len(facts):
+    if len(versions) != len(facts):
         return _unknown("缺少明确且不同的版本配对", facts)
     changed = len({fact.normalized_value for fact in facts}) > 1
     if not changed:
