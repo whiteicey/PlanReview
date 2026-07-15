@@ -136,7 +136,13 @@ def test_sum_equals_has_pass_fail_unknown_and_requires_one_shared_full_key() -> 
     facts = [fact("t", "总数", 36, span_id="t"), fact("a", "甲", 30, span_id="a"), fact("b", "乙", 6, span_id="b")]
     assert run("sum_equals", facts, params=params).status is RuleStatus.PASS
     assert run("sum_equals", [facts[0], facts[1], fact("b", "乙", 7)], params=params).status is RuleStatus.FAIL
-    assert run("sum_equals", [facts[0], facts[1], fact("b", "乙", 6, time_scope="达产期")], params=params).status is RuleStatus.UNKNOWN
+    # Different operands may hold different scopes (each is a distinct quantity);
+    # only each operand's own value must be complete and internally consistent.
+    assert run("sum_equals", [facts[0], facts[1], fact("b", "乙", 6, time_scope="达产期")], params=params).status is RuleStatus.PASS
+    # A single operand appearing with two conflicting complete values is UNKNOWN.
+    assert run("sum_equals", [facts[0], facts[1], facts[2], fact("b2", "乙", 8)], params=params).status is RuleStatus.UNKNOWN
+    # An operand present only without a complete key is UNKNOWN.
+    assert run("sum_equals", [facts[0], facts[1], fact("b", "乙", 6, time_scope=None)], params=params).status is RuleStatus.UNKNOWN
     assert run("sum_equals", facts[:2], params=params).status is RuleStatus.UNKNOWN
 
 
@@ -145,7 +151,9 @@ def test_product_approximately_equals_has_pass_fail_unknown_and_scope_matching()
     facts = [fact("w", "井数", 36), fact("r", "单井产能", 5), fact("t", "总产能", 180)]
     assert run("product_approximately_equals", facts, params=params).status is RuleStatus.PASS
     assert run("product_approximately_equals", [facts[0], facts[1], fact("t", "总产能", 160)], params=params).status is RuleStatus.FAIL
-    assert run("product_approximately_equals", [facts[0], facts[1], fact("t", "总产能", 180, subject="单井")], params=params).status is RuleStatus.UNKNOWN
+    # Cross-operand scope differences are expected (count vs capacity live in
+    # different stages); the product still compares.
+    assert run("product_approximately_equals", [facts[0], facts[1], fact("t", "总产能", 180, subject="单井")], params=params).status is RuleStatus.PASS
     assert run("product_approximately_equals", facts[:2], params=params).status is RuleStatus.UNKNOWN
 
 
@@ -154,7 +162,9 @@ def test_less_or_equal_has_pass_fail_unknown_and_scope_matching() -> None:
     left, right = fact("l", "高峰产量", 170), fact("r", "处理能力", 200)
     assert run("less_or_equal", [left, right], params=params).status is RuleStatus.PASS
     assert run("less_or_equal", [fact("l", "高峰产量", 220), right], params=params).status is RuleStatus.FAIL
-    assert run("less_or_equal", [left, fact("r", "处理能力", 200, statistical_scope="日峰值")], params=params).status is RuleStatus.UNKNOWN
+    # Peak output (达产期) and processing capacity (设计期) naturally differ in
+    # scope; the comparison still holds.
+    assert run("less_or_equal", [left, fact("r", "处理能力", 200, statistical_scope="日峰值")], params=params).status is RuleStatus.PASS
     assert run("less_or_equal", [left, fact("r", "处理能力", None)], params=params).status is RuleStatus.UNKNOWN
 
 
@@ -183,16 +193,63 @@ def test_change_requires_reason_has_pass_fail_unknown_and_scope_matching() -> No
     assert failed.status is RuleStatus.FAIL
     assert failed.evidence_span_ids == ["old", "new", "scan"]
     assert run("change_requires_reason", [old, fact("new", "建设周期", 30, source_version="v3")], [span("建设周期调整原因：地面条件变化", sid="wrong", section="普通说明")], params).status is RuleStatus.FAIL
-    assert run("change_requires_reason", [old], params=params).status is RuleStatus.UNKNOWN
+    # A single-version document has no cross-version change to explain: PASS,
+    # not UNKNOWN. UNKNOWN is reserved for genuinely missing/ambiguous data.
+    single = fact("only", "建设周期", 24, span_id="only", source_version="v1")
+    assert run("change_requires_reason", [single], params=params).status is RuleStatus.PASS
+    assert run("change_requires_reason", [single, fact("only2", "建设周期", 24, span_id="only2", source_version="v1")], params=params).status is RuleStatus.PASS
+    # No usable facts at all remains UNKNOWN.
+    assert run("change_requires_reason", [], params=params).status is RuleStatus.UNKNOWN
+
+
+def _reply_cell(text, *, row, col, sid):
+    return SourceSpan(
+        span_id=sid,
+        document_id="D",
+        section_path=["附件C 审查意见回复表"],
+        block_type=BlockType.TABLE_CELL,
+        table_index=3,
+        row_index=row,
+        column_index=col,
+        text=text,
+        text_hash="h",
+    )
+
+
+def _reply_table(rows):
+    header = [
+        _reply_cell("意见编号", row=0, col=0, sid="h0"),
+        _reply_cell("意见内容", row=0, col=1, sid="h1"),
+        _reply_cell("回复/状态", row=0, col=2, sid="h2"),
+    ]
+    cells = list(header)
+    for index, (opinion, content, status) in enumerate(rows, start=1):
+        cells.append(_reply_cell(opinion, row=index, col=0, sid=f"r{index}c0"))
+        cells.append(_reply_cell(content, row=index, col=1, sid=f"r{index}c1"))
+        cells.append(_reply_cell(status, row=index, col=2, sid=f"r{index}c2"))
+    return cells
 
 
 def test_issue_response_status_exists_has_pass_fail_unknown() -> None:
-    params = {"status_terms": ["已完成", "待整改"]}
-    assert run("issue_response_status_exists", spans=[span("待整改", sid="status", section="审查意见回复表")], params=params).status is RuleStatus.PASS
-    failed = run("issue_response_status_exists", spans=[span("没有状态", section="审查意见回复表")], params=params)
-    assert failed.status is RuleStatus.FAIL
-    assert failed.evidence_span_ids == ["s1"]
-    assert run("issue_response_status_exists", spans=[span("待整改")]).status is RuleStatus.UNKNOWN
+    params = {
+        "status_terms": ["已完成", "待整改"],
+        "section_contains": "审查意见回复表",
+        "id_header_terms": ["意见编号", "意见"],
+        "status_header_terms": ["回复", "状态"],
+    }
+    # 待回复 is a valid status (awaiting reply): a non-empty status cell means a
+    # status is present, even if it is not one of the enumerated closed states.
+    present = _reply_table([("OP-1", "请核对。", "待回复"), ("OP-2", "请补充。", "待整改")])
+    assert run("issue_response_status_exists", spans=present, params=params).status is RuleStatus.PASS
+    # Existence, not completeness: at least one status present passes even when
+    # another row is blank (blank rows are COMPLETENESS-003's concern).
+    partial = _reply_table([("OP-1", "请核对。", "待整改"), ("OP-2", "请补充。", "")])
+    assert run("issue_response_status_exists", spans=partial, params=params).status is RuleStatus.PASS
+    # No status anywhere fails.
+    empty = _reply_table([("OP-1", "请核对。", ""), ("OP-2", "请补充。", "")])
+    assert run("issue_response_status_exists", spans=empty, params=params).status is RuleStatus.FAIL
+    # No reply table at all is UNKNOWN.
+    assert run("issue_response_status_exists", spans=[span("待整改")], params=params).status is RuleStatus.UNKNOWN
 
 
 def test_alias_normalization_has_pass_fail_unknown() -> None:

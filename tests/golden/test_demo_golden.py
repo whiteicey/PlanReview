@@ -51,11 +51,16 @@ def test_expected_findings_preserve_classification_and_evidence_contract(
 
 def test_version_suspected_is_fail_with_human_review(expected_cases, run_golden_case):
     run = run_golden_case("G-003")
-    result = next(result for result in run.rule_results if result.rule_id == "VERSION-001")
+    version_results = [r for r in run.rule_results if r.rule_id == "VERSION-001"]
 
-    assert result.status.value == expected_cases["G-003"]["expected_rules"]["VERSION-001"]
-    assert result.needs_human_review is expected_cases["G-003"]["needs_human_review"]["VERSION-001"]
-    assert result.evidence_span_ids
+    # VERSION-001 fans out over its parameter list; the authoritative rule's
+    # `suspected` policy maps to a declarative human-review flag on every result.
+    assert version_results
+    assert all(result.needs_human_review is True for result in version_results)
+    # At least one parameter is a real, unexplained version change (FAIL).
+    statuses = {result.status.value for result in version_results}
+    assert expected_cases["G-003"]["expected_rules"]["VERSION-001"] in statuses
+    assert all(result.evidence_span_ids for result in version_results)
 
 
 def test_evidence_block_is_unknown_with_blocked_details(expected_cases, run_golden_case):

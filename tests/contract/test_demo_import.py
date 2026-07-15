@@ -86,11 +86,18 @@ def test_import_demo_normalizes_legacy_rule_params(monkeypatch):
     by_id = {rule.rule_id: rule for rule in imported.rules}
 
     assert by_id["CONSISTENCY-001"].params["parameter"] == "开发井总数"
+    assert by_id["CONSISTENCY-002"].params["target"] == "开发井总数"
+    assert by_id["CONSISTENCY-003"].params["left"] == ["开发井总数", "单井设计产能"]
+    assert by_id["CAPACITY-001"].params["left"] == "高峰产量"
     assert by_id["VERSION-001"].params["reason_terms"] == ["调整原因", "变更说明", "依据", "审查意见", "复核"]
     assert by_id["VERSION-001"].params["parameters"]
+    assert by_id["VERSION-001"].requires_human_review is True
     assert by_id["VERSION-002"].params["status_terms"] == ["待整改", "整改中", "已整改", "已闭环"]
     assert by_id["EVIDENCE-001"].params["min_evidence"] == 1
-    assert "legacy_match_dimensions" in by_id["CAPACITY-001"].params
+    # The authoritative partial match_dimensions list is dropped, not carried as
+    # a legacy override — the strict operator contract requires the full key.
+    assert "match_dimensions" not in by_id["CAPACITY-001"].params
+    assert not any(key.startswith("legacy_") for key in by_id["CAPACITY-001"].params)
 
 
 def test_import_demo_rejects_non_docx_and_missing_files(tmp_path: Path):

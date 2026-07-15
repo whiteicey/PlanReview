@@ -143,30 +143,32 @@ def _same_dimensions(
     ) == 1
 
 
-def _single_matching_facts(
-    context: OperatorContext,
-    names: list[str],
-    dimensions: tuple[str, ...],
+def _one_complete_fact_per_operand(
+    context: OperatorContext, names: list[str]
 ) -> tuple[list[ParameterFact] | None, list[ParameterFact]]:
-    """Select exactly one fact per name only when every scope dimension matches.
+    """Select one fact per operand for cross-parameter arithmetic.
 
-    A selector that could choose across different subjects, time scopes,
-    statistical scopes, or conditions is deliberately ambiguous.  It returns
-    UNKNOWN rather than silently grouping or choosing a first occurrence.
+    Each operand is a distinct physical quantity that naturally lives in its own
+    scope (a well count is a build-phase figure; a processing capacity is a
+    design figure), so operands are NOT required to share a comparison scope.
+    Each operand must instead resolve to exactly one complete-key value: a fact
+    with a complete comparison key, and — where the operand appears more than
+    once — a single agreed value.  A missing operand, an operand with no
+    complete-key fact, or an operand carrying conflicting complete values yields
+    UNKNOWN (returned as ``None``).
     """
     groups = [_named_facts(context, name) for name in names]
     gathered = [fact for group in groups for fact in group]
     if len(names) != len(set(names)) or any(not group for group in groups):
         return None, gathered
-    if not all(_usable(group) for group in groups):
-        return None, gathered
-    if any(len(group) != 1 for group in groups):
-        return None, gathered
-    selected = [group[0] for group in groups]
-    comparison_dimensions = tuple(
-        dimension for dimension in dimensions if dimension != "canonical_name"
-    )
-    return (selected if _same_dimensions(selected, comparison_dimensions) else None), gathered
+    selected: list[ParameterFact] = []
+    for group in groups:
+        complete = [fact for fact in group if _usable([fact])]
+        values = {fact.normalized_value for fact in complete}
+        if len(values) != 1:
+            return None, gathered
+        selected.append(complete[0])
+    return selected, gathered
 
 
 def required_sections_exist(context: OperatorContext, params: dict[str, Any]) -> OperatorOutcome:
@@ -229,12 +231,9 @@ def sum_equals(context: OperatorContext, params: dict[str, Any]) -> OperatorOutc
         or not all(isinstance(component, str) and component for component in components)
     ):
         return _unknown("缺少有效求和配置")
-    dimensions = _matching_dimensions(params, _DEFAULT_SCOPE_DIMENSIONS)
-    if dimensions is None:
-        return _unknown("比较维度配置无效")
-    selected, gathered = _single_matching_facts(context, [target, *components], dimensions)
+    selected, gathered = _one_complete_fact_per_operand(context, [target, *components])
     if selected is None:
-        return _unknown("缺少完整、唯一且同范围的求和事实", gathered)
+        return _unknown("缺少完整且唯一的求和事实", gathered)
     target_fact, *component_facts = selected
     total = sum(fact.normalized_value for fact in component_facts)
     matches = total == target_fact.normalized_value
@@ -268,12 +267,9 @@ def product_approximately_equals(
     if not math.isfinite(relative_tolerance) or relative_tolerance < 0:
         return _unknown("相对容差无效")
 
-    dimensions = _matching_dimensions(params, _DEFAULT_SCOPE_DIMENSIONS)
-    if dimensions is None:
-        return _unknown("比较维度配置无效")
-    selected, gathered = _single_matching_facts(context, [*left, right], dimensions)
+    selected, gathered = _one_complete_fact_per_operand(context, [*left, right])
     if selected is None:
-        return _unknown("缺少完整、唯一且同范围的乘积事实", gathered)
+        return _unknown("缺少完整且唯一的乘积事实", gathered)
     *left_facts, right_fact = selected
     product = reduce(mul, (fact.normalized_value for fact in left_facts), 1.0)
     difference = abs(product - right_fact.normalized_value)
@@ -296,12 +292,9 @@ def less_or_equal(context: OperatorContext, params: dict[str, Any]) -> OperatorO
     right = params.get("right")
     if not isinstance(left, str) or not left or not isinstance(right, str) or not right:
         return _unknown("缺少有效容量比较配置")
-    dimensions = _matching_dimensions(params, _DEFAULT_SCOPE_DIMENSIONS)
-    if dimensions is None:
-        return _unknown("比较维度配置无效")
-    selected, gathered = _single_matching_facts(context, [left, right], dimensions)
+    selected, gathered = _one_complete_fact_per_operand(context, [left, right])
     if selected is None:
-        return _unknown("缺少完整、唯一且同范围的容量比较事实", gathered)
+        return _unknown("缺少完整且唯一的容量比较事实", gathered)
     left_fact, right_fact = selected
     matches = left_fact.normalized_value <= right_fact.normalized_value
     return _outcome(
@@ -326,6 +319,16 @@ def change_requires_reason(context: OperatorContext, params: dict[str, Any]) -> 
     if dimensions is None:
         return _unknown("比较维度配置无效")
     facts = _named_facts(context, parameter)
+    usable = [fact for fact in facts if _usable([fact]) and fact.source_version is not None]
+    if not usable:
+        return _unknown("缺少完整且带版本的参数事实", facts)
+    if len({fact.source_version for fact in usable}) < 2:
+        # A single-version document has no cross-version change to explain, but
+        # only when that version resolves to one consistent value; conflicting
+        # single-version values are an intra-version ambiguity, not this rule.
+        if len({fact.normalized_value for fact in usable}) == 1:
+            return _outcome(RuleStatus.PASS, "无跨版本变更", usable)
+        return _unknown("单版本内存在未消解冲突", usable)
     if len(facts) < 2 or not _usable(facts) or not _same_dimensions(facts, dimensions):
         return _unknown("缺少完整且同范围的版本事实", facts)
     versions = {fact.source_version for fact in facts}
@@ -371,22 +374,31 @@ def change_requires_reason(context: OperatorContext, params: dict[str, Any]) -> 
 def issue_response_status_exists(
     context: OperatorContext, params: dict[str, Any]
 ) -> OperatorOutcome:
+    """A prior-round opinion table must carry at least one reply status.
+
+    Rule intent is status *existence*: a non-empty status cell (e.g. 待回复,
+    an awaiting-reply state) counts as present, even when it is not one of the
+    enumerated closed states.  Missing/blank cells are the completeness
+    operator's concern; here a table with no status anywhere at all fails.
+    """
     terms = params.get("status_terms")
     if not isinstance(terms, list) or not terms or not all(
         isinstance(term, str) and term for term in terms
     ):
         return _unknown("缺少有效意见状态配置", spans=context.spans)
-    relevant = [
-        span
-        for span in context.spans
-        if any("审查意见回复表" in section for section in span.section_path)
+    tables = _reply_status_tables(context, params)
+    if tables is None or not tables:
+        return _unknown("缺少审查意见回复表", spans=context.spans)
+    present = [
+        row["status"]
+        for table in tables
+        for row in table
+        if row["status"] is not None and row["status"].text.strip()
     ]
-    matches = [span for span in relevant if any(term in span.text for term in terms)]
-    return _outcome(
-        RuleStatus.PASS if matches else RuleStatus.FAIL,
-        "意见状态存在" if matches else "意见状态缺失",
-        spans=matches or relevant,
-    )
+    if present:
+        return _outcome(RuleStatus.PASS, "意见状态存在", spans=present)
+    every_cell = [span for table in tables for row in table for span in row["cells"]]
+    return _outcome(RuleStatus.FAIL, "意见状态缺失", spans=every_cell)
 
 
 def alias_normalization(context: OperatorContext, params: dict[str, Any]) -> OperatorOutcome:
@@ -436,21 +448,23 @@ def _string_list(value: object) -> list[str] | None:
     return list(value)
 
 
-def reply_table_status_complete(
+def _reply_status_tables(
     context: OperatorContext, params: dict[str, Any]
-) -> OperatorOutcome:
-    """Every data row of a review-opinion table must carry a status cell.
+) -> list[list[dict[str, Any]]] | None:
+    """Locate review-opinion tables and their per-row status cells.
 
-    The status column is identified from the header row (a row that contains
-    both an id-term cell and a status-term cell), never a hardcoded index.  A
-    data row whose status cell is missing or blank fails with that row's spans
-    as evidence.  Absence of such a table is UNKNOWN, not a silent pass.
+    Returns ``None`` for invalid configuration, ``[]`` when no such table with a
+    recognizable header exists, otherwise one entry per table: a list of data
+    rows, each ``{"status": SourceSpan | None, "cells": [SourceSpan, ...]}``.
+    The status column is read from the header (a row holding both an id-term and
+    a status-term cell), never a fixed index, so both the completeness and the
+    existence operators share one honest structural reading.
     """
     section_contains = params.get("section_contains")
     id_terms = _string_list(params.get("id_header_terms"))
     status_terms = _string_list(params.get("status_header_terms"))
     if not isinstance(section_contains, str) or not section_contains or id_terms is None or status_terms is None:
-        return _unknown("缺少有效回复表配置", spans=context.spans)
+        return None
 
     cells = [
         span
@@ -461,16 +475,12 @@ def reply_table_status_complete(
         and span.column_index is not None
         and any(section_contains in part for part in span.section_path)
     ]
-    if not cells:
-        return _unknown("缺少审查意见回复表", spans=context.spans)
-
-    failing: list[SourceSpan] = []
-    found_table = False
+    tables: list[list[dict[str, Any]]] = []
     for table_index in sorted({span.table_index for span in cells}):
-        table_cells = [span for span in cells if span.table_index == table_index]
         rows: dict[int, dict[int, SourceSpan]] = {}
-        for span in table_cells:
-            rows.setdefault(span.row_index, {})[span.column_index] = span
+        for span in cells:
+            if span.table_index == table_index:
+                rows.setdefault(span.row_index, {})[span.column_index] = span
         header_row = None
         status_column = None
         for row_index in sorted(rows):
@@ -487,19 +497,44 @@ def reply_table_status_complete(
                 break
         if header_row is None or status_column is None:
             continue
-        found_table = True
-        for row_index in sorted(rows):
-            if row_index <= header_row:
-                continue
-            columns = rows[row_index]
-            status_span = columns.get(status_column)
+        data_rows = [
+            {
+                "status": rows[row_index].get(status_column),
+                "cells": [span for _, span in sorted(rows[row_index].items())],
+            }
+            for row_index in sorted(rows)
+            if row_index > header_row
+        ]
+        tables.append(data_rows)
+    return tables
+
+
+def reply_table_status_complete(
+    context: OperatorContext, params: dict[str, Any]
+) -> OperatorOutcome:
+    """Every data row of a review-opinion table must carry a status cell.
+
+    The status column is identified from the header row (a row that contains
+    both an id-term cell and a status-term cell), never a hardcoded index.  A
+    data row whose status cell is missing or blank fails with that row's spans
+    as evidence.  Absence of such a table is UNKNOWN, not a silent pass.
+    """
+    tables = _reply_status_tables(context, params)
+    if tables is None:
+        return _unknown("缺少有效回复表配置", spans=context.spans)
+    if not tables:
+        return _unknown("缺少审查意见回复表", spans=context.spans)
+
+    failing: list[SourceSpan] = []
+    for table in tables:
+        for row in table:
+            status_span = row["status"]
             if status_span is None or not status_span.text.strip():
-                failing.extend(span for _, span in sorted(columns.items()))
-    if not found_table:
-        return _unknown("缺少审查意见回复表表头", spans=context.spans)
+                failing.extend(row["cells"])
     if failing:
         return _outcome(RuleStatus.FAIL, "审查意见回复缺少状态", spans=failing)
-    return _outcome(RuleStatus.PASS, "审查意见回复完整", spans=cells)
+    every_cell = [span for table in tables for row in table for span in row["cells"]]
+    return _outcome(RuleStatus.PASS, "审查意见回复完整", spans=every_cell)
 
 
 def prose_alias_unnormalized(

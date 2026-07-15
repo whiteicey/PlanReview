@@ -156,6 +156,12 @@ def _load_production_rules(
             if canonical:
                 params["canonical_name"] = canonical
                 params["aliases"] = [alias for alias in aliases if alias != canonical]
+        if normalized.get("operator") == "issue_response_status_exists":
+            # The status-existence operator reads the reply table structurally,
+            # like the reply-completeness rule; supply the same header contract.
+            params.setdefault("section_contains", "审查意见回复表")
+            params.setdefault("id_header_terms", ["意见编号", "意见"])
+            params.setdefault("status_header_terms", ["回复", "状态"])
         # Older generated demo bundles used ``suspected`` for missing data,
         # while the production enum deliberately uses UNKNOWN. Preserve intent
         # as metadata, but validate through the production three-value model.
