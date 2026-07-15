@@ -38,6 +38,11 @@ from app.storage.case_files import StoredFile
 # ``document:p:0``); they remain metadata identifiers and never file paths.
 _SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 
+# Upper bound on an evidence/fact id list. A 300-page DOCX can have thousands of
+# spans and a whole-document rule may cite them all, so this is generous; it only
+# exists to reject pathological, non-document input.
+_MAX_EVIDENCE_ITEMS = 20_000
+
 _SECRET_OR_BODY_MARKERS = (
     "api_key",
     "apikey",
@@ -543,7 +548,11 @@ def _safe_vocabulary(value: str | None, field_name: str, *, optional: bool = Fal
 
 
 def _safe_identifier_list(values: list[str], field_name: str) -> list[str]:
-    if not isinstance(values, list) or len(values) > 100:
+    # A whole-document rule (required sections, evidence gate) or the Mock may
+    # cite every span in the document as evidence, and a 300-page DOCX has far
+    # more than 100 spans. The bound stays generous but finite to reject only
+    # pathological input, not real documents.
+    if not isinstance(values, list) or len(values) > _MAX_EVIDENCE_ITEMS:
         raise ValueError(f"{field_name} must be a bounded list")
     return [_safe_identifier(value, field_name) for value in values]
 

@@ -61,6 +61,50 @@ def test_round_trip_run_and_human_review(tmp_path):
     assert reviewed.findings[0].human_note == "专家确认"
 
 
+def test_whole_document_rule_result_evidence_persists(tmp_path):
+    # Whole-document rules (required sections, evidence gate) and the Mock legiti-
+    # mately reference every span in the document; a real DOCX already has >100
+    # spans, so the evidence list bound must accommodate a full document.
+    db = tmp_path / "review.db"
+    span_ids = [f"D:p:{index}" for index in range(400)]
+    run = ReviewRun(
+        "CASE-many-spans",
+        rule_results=[
+            RuleResult(
+                rule_id="COMPLETENESS-001",
+                status=RuleStatus.PASS,
+                severity=Severity.MEDIUM,
+                category="completeness",
+                message="章节齐全",
+                evidence_span_ids=span_ids,
+            )
+        ],
+    )
+    ReviewRepository(create_session(db)).save_run(run)
+    loaded = ReviewRepository(create_session(db)).get_run("CASE-many-spans")
+    assert loaded is not None
+    assert len(loaded.rule_results[0].evidence_span_ids) == 400
+
+
+def test_absurdly_large_evidence_list_is_still_rejected(tmp_path):
+    db = tmp_path / "review.db"
+    run = ReviewRun(
+        "CASE-too-many",
+        rule_results=[
+            RuleResult(
+                rule_id="R",
+                status=RuleStatus.PASS,
+                severity=Severity.LOW,
+                category="completeness",
+                message="x",
+                evidence_span_ids=[f"D:p:{index}" for index in range(20_001)],
+            )
+        ],
+    )
+    with pytest.raises(ValueError):
+        ReviewRepository(create_session(db)).save_run(run)
+
+
 def test_rule_result_and_finding_with_chinese_parameter_persist(tmp_path):
     # Rule results and findings carry a Chinese parameter name (高峰产量); these
     # must persist like fact vocabulary, not be rejected as unsafe identifiers.
