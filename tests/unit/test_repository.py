@@ -61,6 +61,46 @@ def test_round_trip_run_and_human_review(tmp_path):
     assert reviewed.findings[0].human_note == "专家确认"
 
 
+def test_rule_result_and_finding_with_chinese_parameter_persist(tmp_path):
+    # Rule results and findings carry a Chinese parameter name (高峰产量); these
+    # must persist like fact vocabulary, not be rejected as unsafe identifiers.
+    db = tmp_path / "review.db"
+    run = ReviewRun(
+        "CASE-cn-param",
+        rule_results=[
+            RuleResult(
+                rule_id="CAPACITY-001",
+                status=RuleStatus.FAIL,
+                severity=Severity.HIGH,
+                category="cross_domain",
+                parameter="高峰产量",
+                message="高峰产量超过地面处理能力",
+                evidence_span_ids=["span-1"],
+            )
+        ],
+        findings=[
+            Finding(
+                finding_id="F-cn",
+                origin=Origin.RULE,
+                category="cross_domain",
+                severity=Severity.HIGH,
+                parameter="高峰产量",
+                title="高峰产量需复核",
+                description="高峰产量超过地面处理能力",
+                suggestion="请补充证据并由专家复核",
+                rule_id="CAPACITY-001",
+                evidence_span_ids=["span-1"],
+                needs_human_review=True,
+            )
+        ],
+    )
+    ReviewRepository(create_session(db)).save_run(run)
+    loaded = ReviewRepository(create_session(db)).get_run("CASE-cn-param")
+    assert loaded is not None
+    assert loaded.rule_results[0].parameter == "高峰产量"
+    assert loaded.findings[0].parameter == "高峰产量"
+
+
 def test_facts_round_trip_with_source_document_in_fresh_session(tmp_path):
     db = tmp_path / "review.db"
     fact = ParameterFact(

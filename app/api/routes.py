@@ -24,11 +24,24 @@ from app.persistence.models import CaseRecord
 from app.persistence.repository import ReviewRepository
 from app.reports.exporters import export_anonymous_package, export_excel, export_word
 from app.review.pipeline import ReviewPipeline
+from app.rules.ruleset import LoadedRuleset, RulesetError, load_active_ruleset
 from app.settings import get_settings
 from app.storage.case_files import StoredFile, UploadTooLargeError, store_upload_streaming
 from app.storage.paths import safe_join, validate_upload_name
 
 router = APIRouter(prefix="/api", tags=["local review"])
+
+
+def _active_ruleset() -> LoadedRuleset | None:
+    """Load the active rule set, or None when none is configured/valid.
+
+    The review path degrades to an LLM-only pass rather than failing when no
+    ruleset is available; the response tells the client this happened.
+    """
+    try:
+        return load_active_ruleset()
+    except RulesetError:
+        return None
 
 
 def _case_id(value: str) -> str:
@@ -147,7 +160,10 @@ def review_case(case_id: str) -> ReviewSummary:
     except (ParseError, OSError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "DOCX 解析失败，仅处理文本型 DOCX") from exc
 
-    run = ReviewPipeline().run(case_id, documents, [], MockProvider())
+    loaded = _active_ruleset()
+    rules = loaded.rules if loaded else []
+    terminology = loaded.terminology if loaded else None
+    run = ReviewPipeline(terminology).run(case_id, documents, rules, MockProvider())
     try:
         repository.save_run(run)
     except ValueError as exc:
@@ -158,6 +174,8 @@ def review_case(case_id: str) -> ReviewSummary:
         finding_count=len(run.findings),
         fact_count=len(run.facts),
         stages=[record.stage.value for record in run.stage_records],
+        rules_loaded=loaded is not None,
+        rule_count=len(rules),
     )
 
 

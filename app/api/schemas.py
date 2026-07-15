@@ -27,6 +27,8 @@ class ReviewSummary(BaseModel):
     finding_count: int
     fact_count: int
     stages: list[str]
+    rules_loaded: bool
+    rule_count: int
 
 
 class FindingResponse(BaseModel):
