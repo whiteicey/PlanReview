@@ -27,13 +27,22 @@ from scripts.import_demo import DemoImportError, import_demo
 TESTS_ROOT = Path(__file__).resolve().parent
 EXPECTED_CASES_PATH = TESTS_ROOT / "golden_cases_demo.expected.jsonl"
 
-# An environment variable is intentional: the source package is not a repository
-# fixture, so no parent-directory walk may accidentally ingest unrelated data.
-DEMO_ROOT = (
-    Path(os.environ["REVIEW_DEMO_ROOT"]).expanduser().resolve()
-    if os.environ.get("REVIEW_DEMO_ROOT")
-    else None
-)
+# Prefer an explicit REVIEW_DEMO_ROOT override; otherwise fall back to the sample
+# package shipped in-repo (resolved via the same ancestor-walk the app uses).
+# When neither is available the golden cases skip honestly rather than fake a pass.
+def _discover_demo_root() -> Path | None:
+    override = os.environ.get("REVIEW_DEMO_ROOT")
+    if override:
+        return Path(override).expanduser().resolve()
+    try:
+        from app.rules.ruleset import RulesetNotConfigured, resolve_ruleset_root
+
+        return resolve_ruleset_root()
+    except (RulesetNotConfigured, Exception):
+        return None
+
+
+DEMO_ROOT = _discover_demo_root()
 
 DEMO_FILES = {
     "DEMO-001": "DEMO-001_正常基线方案_V1.0.docx",

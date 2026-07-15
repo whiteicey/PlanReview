@@ -2,9 +2,14 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
+.claude/
 storage/
 *.orig
 *.db
 *.sqlite3
 *.log
 configs/secrets*
+llm_config.json
+.env
+*.egg-info/
+CLAUDE.md
