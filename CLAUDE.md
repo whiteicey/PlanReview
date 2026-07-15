@@ -51,6 +51,7 @@ python scripts/run_local.py              # 启动演示, 浏览器 http://127.0.
 | 文档 | 内容 |
 |------|------|
 | `docs/DEMO.md` | 端到端演示操作步骤与边界 |
+| `docs/使用手册.md` | 面向非技术石油员工的详细使用手册（操作/读结果/FAQ/红线） |
 | `docs/golden-status-deviation.md` | golden 与外部 oracle 的每一处偏差 + 诚实无法检出的 finding（单文档时序矛盾、unknown_scope、36/38 抽取限制） |
 | `docs/2026-07-14-review-assistant-kernel-design.md` | 初始内核设计快照（日期版；operator 表为当时 10 条，现为 12 条以代码为准） |
 | `docs/test-report-template.md` | 诚实验收报告模板（未跑项标「未执行」，禁虚构指标） |
