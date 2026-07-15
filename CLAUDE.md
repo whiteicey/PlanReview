@@ -55,4 +55,5 @@ python scripts/run_local.py              # 启动演示, 浏览器 http://127.0.
 | `docs/golden-status-deviation.md` | golden 与外部 oracle 的每一处偏差 + 诚实无法检出的 finding（单文档时序矛盾、unknown_scope、36/38 抽取限制） |
 | `docs/2026-07-14-review-assistant-kernel-design.md` | 初始内核设计快照（日期版；operator 表为当时 10 条，现为 12 条以代码为准） |
 | `docs/test-report-template.md` | 诚实验收报告模板（未跑项标「未执行」，禁虚构指标） |
+| `docs/online-llm-adapter-plan.md` | 在线 LLM 真适配器设计方案（待审阅未实现；触及 key+外网需 /security-review） |
 | `docs/superpowers/plans/2026-07-14-review-assistant-kernel.md` | 24 任务实施计划 |
