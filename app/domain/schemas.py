@@ -79,6 +79,7 @@ class RuleDefinition(BaseModel):
     operator: str
     on_missing: OnMissing
     enabled: bool = True
+    requires_human_review: bool = False
     params: dict[str, Any] = Field(default_factory=dict)
     source_type: str = "DEMO_ONLY"
 
