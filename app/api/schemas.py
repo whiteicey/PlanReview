@@ -77,4 +77,29 @@ class RulesetReloadRequest(BaseModel):
     root: str | None = Field(default=None, max_length=1024)
 
 
+class LLMConfigResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str
+    base_url: str | None = None
+    model: str | None = None
+    key_present: bool
+
+
+class LLMConfigUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: Literal["mock", "anthropic"]
+    base_url: str | None = Field(default=None, max_length=1024)
+    model: str | None = Field(default=None, max_length=200)
+    api_key: str | None = Field(default=None, max_length=512)
+
+
+class LLMHealthResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool
+    detail: str
+
+
 ExportFormat = Literal["xlsx", "docx", "anonymous"]

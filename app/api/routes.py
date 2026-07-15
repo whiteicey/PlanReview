@@ -14,12 +14,18 @@ from app.api.schemas import (
     ExportFormat,
     FindingResponse,
     FindingReviewUpdate,
+    LLMConfigResponse,
+    LLMConfigUpdate,
+    LLMHealthResponse,
     ReviewSummary,
     RulesetReloadRequest,
     RulesetStatus,
 )
-from app.domain.exceptions import ParseError, PathTraversalError, UnsupportedFileTypeError
+from app.domain.exceptions import ParseError, PathTraversalError, ReviewError, UnsupportedFileTypeError
+from app.llm.config_store import LLMConfigStore
+from app.llm.factory import build_provider
 from app.llm.mock import MockProvider
+from app.llm.provider import LLMProviderError, LLMRequest
 from app.parsers.docx_parser import DocxParser
 from app.persistence.db import create_session
 from app.persistence.models import CaseRecord
@@ -27,6 +33,7 @@ from app.persistence.repository import ReviewRepository
 from app.reports.exporters import export_anonymous_package, export_excel, export_word
 from app.review.pipeline import ReviewPipeline
 from app.rules.ruleset import LoadedRuleset, RulesetError, load_active_ruleset
+from app.security.credentials import CredentialStore
 from app.settings import get_settings
 from app.storage.case_files import StoredFile, UploadTooLargeError, store_upload_streaming
 from app.storage.paths import safe_join, validate_upload_name
@@ -75,6 +82,40 @@ def _ruleset_status() -> RulesetStatus:
         rule_count=len(loaded.rules) if loaded else 0,
         root=str(loaded.root) if loaded else None,
     )
+
+
+# LLM configuration store (non-key config on disk; key in the credential store).
+_LLM_CONFIG_STORE: LLMConfigStore | None = None
+
+
+def _default_credentials() -> CredentialStore:
+    return CredentialStore()
+
+
+def _reset_llm_config_store(credentials=None) -> None:
+    """(Re)build the config store, injecting credentials in tests."""
+    global _LLM_CONFIG_STORE
+    creds = credentials if credentials is not None else _default_credentials()
+    _LLM_CONFIG_STORE = LLMConfigStore(get_settings().storage_root / "llm_config.json", creds)
+
+
+def _llm_config_store() -> LLMConfigStore:
+    if _LLM_CONFIG_STORE is None:
+        _reset_llm_config_store()
+    assert _LLM_CONFIG_STORE is not None
+    return _LLM_CONFIG_STORE
+
+
+def _build_active_provider():
+    store = _llm_config_store()
+    config = store.load()
+    try:
+        api_key = store.get_key()
+    except Exception:
+        # Credential backend unavailable (e.g. non-Windows / no keyring): fall
+        # back to Mock rather than failing the whole review.
+        api_key = None
+    return build_provider(config, api_key)
 
 
 def _case_id(value: str) -> str:
@@ -158,6 +199,68 @@ def reload_ruleset(request: RulesetReloadRequest) -> RulesetStatus:
     return _ruleset_status()
 
 
+def _llm_config_response() -> LLMConfigResponse:
+    store = _llm_config_store()
+    config = store.load()
+    return LLMConfigResponse(
+        provider=config.provider,
+        base_url=config.base_url,
+        model=config.model,
+        key_present=store.key_present(),
+    )
+
+
+@router.get("/llm/config", response_model=LLMConfigResponse)
+def get_llm_config() -> LLMConfigResponse:
+    return _llm_config_response()
+
+
+@router.post("/llm/config", response_model=LLMConfigResponse)
+def set_llm_config(update: LLMConfigUpdate) -> LLMConfigResponse:
+    """Save provider/base_url/model to disk and the key to the credential store.
+
+    The API key is never written to disk or echoed back; the response only tells
+    the client whether a key is present.
+    """
+    try:
+        _llm_config_store().save(
+            provider=update.provider,
+            base_url=update.base_url,
+            model=update.model,
+            api_key=update.api_key,
+        )
+    except ReviewError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Base URL 不合法") from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return _llm_config_response()
+
+
+@router.post("/llm/health", response_model=LLMHealthResponse)
+def llm_health() -> LLMHealthResponse:
+    """Probe the configured provider with a minimal request.
+
+    Mock always reports ok. A configured online provider makes one real call; any
+    failure is reported as ok:false with a short reason, never the key/body.
+    """
+    provider = _build_active_provider()
+    if isinstance(provider, MockProvider):
+        return LLMHealthResponse(ok=True, detail="使用内置 Mock，无需连接")
+    probe = LLMRequest(
+        model="health",
+        system_prompt="健康检查",
+        user_content="健康检查",
+        evidence_span_ids=["health-check-span"],
+    )
+    try:
+        provider.review(probe)
+    except LLMProviderError as exc:
+        return LLMHealthResponse(ok=False, detail=str(exc))
+    except Exception:
+        return LLMHealthResponse(ok=False, detail="连接失败")
+    return LLMHealthResponse(ok=True, detail="连接正常")
+
+
 @router.post("/cases", status_code=status.HTTP_201_CREATED, response_model=CaseCreated)
 async def create_case(file: UploadFile = File(...)) -> CaseCreated:
     settings = get_settings()
@@ -215,7 +318,8 @@ def review_case(case_id: str) -> ReviewSummary:
     loaded = _active_ruleset()
     rules = loaded.rules if loaded else []
     terminology = loaded.terminology if loaded else None
-    run = ReviewPipeline(terminology).run(case_id, documents, rules, MockProvider())
+    provider = _build_active_provider()
+    run = ReviewPipeline(terminology).run(case_id, documents, rules, provider)
     try:
         repository.save_run(run)
     except ValueError as exc:
