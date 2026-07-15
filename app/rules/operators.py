@@ -606,6 +606,121 @@ def evidence_required(context: OperatorContext, params: dict[str, Any]) -> Opera
     )
 
 
+def _string_list(value: object) -> list[str] | None:
+    if not isinstance(value, list) or not value:
+        return None
+    if not all(isinstance(item, str) and item for item in value):
+        return None
+    return list(value)
+
+
+def reply_table_status_complete(
+    context: OperatorContext, params: dict[str, Any]
+) -> OperatorOutcome:
+    """Every data row of a review-opinion table must carry a status cell.
+
+    The status column is identified from the header row (a row that contains
+    both an id-term cell and a status-term cell), never a hardcoded index.  A
+    data row whose status cell is missing or blank fails with that row's spans
+    as evidence.  Absence of such a table is UNKNOWN, not a silent pass.
+    """
+    section_contains = params.get("section_contains")
+    id_terms = _string_list(params.get("id_header_terms"))
+    status_terms = _string_list(params.get("status_header_terms"))
+    if not isinstance(section_contains, str) or not section_contains or id_terms is None or status_terms is None:
+        return _unknown("缺少有效回复表配置", spans=context.spans)
+
+    cells = [
+        span
+        for span in context.spans
+        if span.block_type is BlockType.TABLE_CELL
+        and span.table_index is not None
+        and span.row_index is not None
+        and span.column_index is not None
+        and any(section_contains in part for part in span.section_path)
+    ]
+    if not cells:
+        return _unknown("缺少审查意见回复表", spans=context.spans)
+
+    failing: list[SourceSpan] = []
+    found_table = False
+    for table_index in sorted({span.table_index for span in cells}):
+        table_cells = [span for span in cells if span.table_index == table_index]
+        rows: dict[int, dict[int, SourceSpan]] = {}
+        for span in table_cells:
+            rows.setdefault(span.row_index, {})[span.column_index] = span
+        header_row = None
+        status_column = None
+        for row_index in sorted(rows):
+            columns = rows[row_index]
+            has_id = any(any(term in span.text for term in id_terms) for span in columns.values())
+            status_cols = [
+                column
+                for column, span in columns.items()
+                if any(term in span.text for term in status_terms)
+            ]
+            if has_id and status_cols:
+                header_row = row_index
+                status_column = min(status_cols)
+                break
+        if header_row is None or status_column is None:
+            continue
+        found_table = True
+        for row_index in sorted(rows):
+            if row_index <= header_row:
+                continue
+            columns = rows[row_index]
+            status_span = columns.get(status_column)
+            if status_span is None or not status_span.text.strip():
+                failing.extend(span for _, span in sorted(columns.items()))
+    if not found_table:
+        return _unknown("缺少审查意见回复表表头", spans=context.spans)
+    if failing:
+        return _outcome(RuleStatus.FAIL, "审查意见回复缺少状态", spans=failing)
+    return _outcome(RuleStatus.PASS, "审查意见回复完整", spans=cells)
+
+
+def prose_alias_unnormalized(
+    context: OperatorContext, params: dict[str, Any]
+) -> OperatorOutcome:
+    """Flag a distinct alias term used in body prose instead of the canonical name.
+
+    Generalizes ``alias_normalization`` (which only sees extracted facts) to the
+    case where an alias appears in narrative text without a unit, so no fact is
+    produced.  Only *distinct* aliases are considered — an alias that is a
+    substring of its own canonical name (e.g. 生产井 ⊂ 生产井数) is a generic word,
+    not a divergent term, and would false-positive on clean documents.  Evaluated
+    per document; every distinct-alias occurrence in prose is a divergence from
+    the canonical vocabulary, regardless of whether the canonical also appears.
+    """
+    terms = params.get("terms")
+    if not isinstance(terms, list) or not terms:
+        return _unknown("缺少术语别名配置")
+    entries: list[tuple[str, list[str]]] = []
+    for entry in terms:
+        if not isinstance(entry, dict):
+            return _unknown("术语别名配置无效")
+        canonical = entry.get("canonical")
+        aliases = _string_list(entry.get("aliases"))
+        if not isinstance(canonical, str) or not canonical or aliases is None:
+            return _unknown("术语别名配置无效")
+        distinct = [alias for alias in aliases if alias not in canonical]
+        entries.append((canonical, distinct))
+
+    paragraphs = [span for span in context.spans if span.block_type is BlockType.PARAGRAPH]
+    if not paragraphs:
+        return _unknown("缺少正文段落", spans=context.spans)
+
+    failing: list[SourceSpan] = []
+    for _, aliases in entries:
+        for span in paragraphs:
+            if any(alias in span.text for alias in aliases):
+                failing.append(span)
+    if failing:
+        return _outcome(RuleStatus.FAIL, "参数别名未在正文归一", spans=failing)
+    return _outcome(RuleStatus.PASS, "正文未见未归一别名", spans=paragraphs)
+
+
 _OPERATORS: dict[str, Callable[[OperatorContext, dict[str, Any]], OperatorOutcome]] = {
     "required_sections_exist": required_sections_exist,
     "required_parameter_table_exists": required_parameter_table_exists,
@@ -617,6 +732,8 @@ _OPERATORS: dict[str, Callable[[OperatorContext, dict[str, Any]], OperatorOutcom
     "issue_response_status_exists": issue_response_status_exists,
     "alias_normalization": alias_normalization,
     "evidence_required": evidence_required,
+    "reply_table_status_complete": reply_table_status_complete,
+    "prose_alias_unnormalized": prose_alias_unnormalized,
 }
 OPERATOR_REGISTRY: dict[str, Callable[[OperatorContext, dict[str, Any]], OperatorOutcome]] = {
     **_OPERATORS,

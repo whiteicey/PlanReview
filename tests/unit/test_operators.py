@@ -75,6 +75,8 @@ def test_operator_registry_is_exact_immutable_and_contains_no_eval() -> None:
             "issue_response_status_exists",
             "alias_normalization",
             "evidence_required",
+            "reply_table_status_complete",
+            "prose_alias_unnormalized",
         }
     )
     assert isinstance(OPERATOR_NAMES, frozenset)
