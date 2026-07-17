@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 .claude/
 storage/
+graphify-out/
 *.orig
 *.db
 *.sqlite3
