@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.storage.case_files import StoredFile
@@ -57,16 +57,51 @@ class CaseFileORM(Base):
 
 class ReviewRunORM(Base):
     __tablename__ = "review_runs"
+    __table_args__ = (
+        Index("ix_review_runs_case_created", "case_id", "created_at", "id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True)
     case_id: Mapped[str] = mapped_column(
-        ForeignKey("cases.case_id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+        ForeignKey("cases.case_id", ondelete="CASCADE"), nullable=False, index=True
     )
     final_status: Mapped[str] = mapped_column(String(64), nullable=False)
     facts: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
     stage_records: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
     evidence_text_hashes: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, nullable=False)
     evidence_locations: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, nullable=False)
+    llm_provider: Mapped[str | None] = mapped_column(String(128))
+    llm_model: Mapped[str | None] = mapped_column(String(255))
+    llm_status: Mapped[str] = mapped_column(String(32), nullable=False, default="NOT_RUN")
+    llm_finding_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    llm_error_summary: Mapped[str | None] = mapped_column(Text)
+    validation_reason_code: Mapped[str | None] = mapped_column(String(64))
+    candidate_count: Mapped[int | None] = mapped_column(Integer)
+    valid_count: Mapped[int | None] = mapped_column(Integer)
+    rejected_count: Mapped[int | None] = mapped_column(Integer)
+    available_span_count: Mapped[int | None] = mapped_column(Integer)
+    selected_span_count: Mapped[int | None] = mapped_column(Integer)
+    selected_character_count: Mapped[int | None] = mapped_column(Integer)
+    coverage_ratio: Mapped[float | None] = mapped_column(Float)
+    git_sha: Mapped[str | None] = mapped_column(String(64))
+    prompt_version: Mapped[str | None] = mapped_column(String(128))
+    evidence_selector_version: Mapped[str | None] = mapped_column(String(128))
+    max_tokens: Mapped[int | None] = mapped_column(Integer)
+    timeout: Mapped[float | None] = mapped_column(Float)
+    temperature: Mapped[float | None] = mapped_column(Float)
+    batch_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    batch_metrics: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
+    premerge_finding_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    postmerge_finding_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    deduplicated_finding_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    stop_reason: Mapped[str | None] = mapped_column(String(64))
+    ai_guard_rejections: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
+    deduplication_records: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
+    packet_lifecycle_ledger: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    ai_candidate_lifecycle_ledger: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    rule_metrics: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    worker_token: Mapped[str | None] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -78,6 +113,32 @@ class ReviewRunORM(Base):
     findings: Mapped[list["FindingORM"]] = relationship(
         back_populates="review_run", cascade="all, delete-orphan", passive_deletes=True
     )
+    progress_events: Mapped[list["ReviewProgressEventORM"]] = relationship(
+        back_populates="review_run", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class ReviewProgressEventORM(Base):
+    __tablename__ = "review_progress_events"
+    __table_args__ = (
+        UniqueConstraint("run_id", "sequence", name="uq_review_progress_run_sequence"),
+        Index("ix_review_progress_run_sequence", "run_id", "sequence"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("review_runs.run_id", ondelete="CASCADE"), nullable=False
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    stage: Mapped[str] = mapped_column(String(64), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    message: Mapped[str] = mapped_column(String(500), nullable=False)
+    details_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    review_run: Mapped[ReviewRunORM] = relationship(back_populates="progress_events")
 
 
 class RuleResultORM(Base):
@@ -124,6 +185,10 @@ class FindingORM(Base):
     needs_human_review: Mapped[bool] = mapped_column(nullable=False, default=False)
     review_status: Mapped[str] = mapped_column(String(32), nullable=False)
     human_note: Mapped[str | None] = mapped_column(Text)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_expert_experience: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    experience_saved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    experience_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ai_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     review_run: Mapped[ReviewRunORM] = relationship(back_populates="findings")
 
@@ -136,3 +201,19 @@ class RecycleBinORM(Base):
     )
     deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     case: Mapped[CaseORM] = relationship(back_populates="recycle_entry")
+
+
+class FileOperationAuditORM(Base):
+    __tablename__ = "file_operation_audit"
+    __table_args__ = (
+        Index("ix_file_operation_audit_recovery_created", "recovery_required", "created_at"),
+    )
+
+    event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    case_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    stage: Mapped[str] = mapped_column(String(64), nullable=False)
+    result: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    summary: Mapped[str | None] = mapped_column(String(255))
+    recovery_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

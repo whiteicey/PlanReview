@@ -123,3 +123,26 @@ def test_parser_interleaves_tables_with_active_xml_section_path(tmp_path: Path) 
         (0, 0, 0),
         (1, 0, 0),
     ]
+
+
+def test_parser_deduplicates_merged_xml_cells_but_keeps_distinct_equal_text(tmp_path: Path):
+    path = tmp_path / "merged.docx"
+    doc = Document()
+    table = doc.add_table(rows=2, cols=2)
+    merged = table.cell(0, 0).merge(table.cell(0, 1))
+    merged.text = "merged value"
+    table.cell(1, 0).text = "same value"
+    table.cell(1, 1).text = "same value"
+    doc.save(path)
+
+    parsed = DocxParser().parse(path, document_id="D4")
+    assert [span.text for span in parsed.table_cells] == [
+        "merged value",
+        "same value",
+        "same value",
+    ]
+    assert [span.span_id for span in parsed.table_cells] == [
+        "D4:t:0:0:0",
+        "D4:t:0:1:0",
+        "D4:t:0:1:1",
+    ]

@@ -27,3 +27,81 @@ rules:
     enabled: true
     params:
       terms: []
+  - rule_id: REFERENCE-001
+    version: 1.2.0
+    name: Reference existence and target matching
+    category: traceability
+    severity: medium
+    operator: reference_v12
+    on_missing: unknown
+    source_type: DEMO_ONLY
+    enabled: false
+    params:
+      references: []
+  - rule_id: SUMMARY_DETAIL-001
+    version: 1.2.0
+    name: Explicit summary and detail reconciliation
+    category: aggregation
+    severity: medium
+    operator: summary_detail_v12
+    on_missing: unknown
+    source_type: DEMO_ONLY
+    enabled: false
+    params:
+      target: ""
+      components: []
+      absolute_tolerance: 0.0
+      relative_tolerance: 0.000001
+  - rule_id: CROSS_SOURCE_PARAM-001
+    version: 1.2.0
+    name: Cross-source parameter consistency
+    category: consistency
+    severity: medium
+    operator: cross_source_param_v12
+    on_missing: unknown
+    source_type: DEMO_ONLY
+    enabled: false
+    params:
+      parameter: ""
+      relative_tolerance: 0.000001
+  - rule_id: UNIT_MAGNITUDE-001
+    version: 1.2.0
+    name: Same-dimension unit and magnitude consistency
+    category: consistency
+    severity: medium
+    operator: unit_magnitude_v12
+    on_missing: unknown
+    source_type: DEMO_ONLY
+    enabled: false
+    params:
+      parameter: ""
+      ratio_threshold: 10.0
+  - rule_id: SCHEDULE-001
+    version: 1.2.0
+    name: Schedule endpoints and duration consistency
+    category: cross_domain
+    severity: medium
+    operator: schedule_v12
+    on_missing: unknown
+    source_type: DEMO_ONLY
+    enabled: false
+    params:
+      start: ""
+      end: ""
+      duration: ""
+      inclusive_months: true
+  - rule_id: EQUIPMENT_REDUNDANCY-001
+    version: 1.2.0
+    name: Equipment operating and standby capacity reconciliation
+    category: capacity
+    severity: medium
+    operator: equipment_redundancy_v12
+    on_missing: unknown
+    source_type: DEMO_ONLY
+    enabled: false
+    params:
+      total: ""
+      running: ""
+      standby: ""
+      single_capacity: ""
+      demand: ""

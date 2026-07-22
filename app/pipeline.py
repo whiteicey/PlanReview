@@ -71,9 +71,31 @@ class StageRunner:
 
 def sanitize_error(error: str, *, max_length: int = 240) -> str:
     """Return a short diagnostic without paths, credentials, or request bodies."""
-    sanitized = re.sub(r"(?i)(?:[A-Za-z]:)?[\\/](?:[^\s\\/]+[\\/])*[^\s\\/]+", "[path]", error)
+    # A slash followed only by digits is a ratio/counter (for example 1/17),
+    # not a filesystem path.  Require an absolute drive/UNC path or a rooted
+    # POSIX path with a non-numeric path component.
+    sanitized = re.sub(
+        r"(?ix)(?:"
+        r"\b[A-Z]:[\\/](?:[^\s\\/]+[\\/])*[^\s\\/]+"
+        r"|\\\\[^\\\s]+\\[^\\\s]+(?:\\[^\s\\]+)*"
+        r"|(?<![\w])/(?:[^\s/]+/)+[^\s/]+"
+        r"|(?<![\w])/[A-Za-z_.-][^\s/]*"
+        r")",
+        "[path]",
+        error,
+    )
     sanitized = re.sub(r"(?i)(?:api[_-]?key|token|secret|password)\s*[:=]\s*[^\s,;]+", "[redacted]", sanitized)
-    sanitized = re.sub(r"(?i)\b(?:body|request|payload)\s*=\s*.*", "[redacted body]", sanitized)
+    sanitized = re.sub(
+        r"(?i)\b(?:request|response)[_-]?body\s*[:=].*",
+        "[redacted]",
+        sanitized,
+    )
+    sanitized = re.sub(r"(?i)\b(?:body|request|payload)\s*=\s*.*", "[redacted]", sanitized)
+    sanitized = re.sub(
+        r"(?i)\b(?:document|docx|body|request|response|payload)\b",
+        "[redacted]",
+        sanitized,
+    )
     sanitized = re.sub(r"\b[A-Za-z0-9+/]{24,}={0,2}\b", "[redacted]", sanitized)
     sanitized = re.sub(r"\s+", " ", sanitized).strip()
     return sanitized[:max_length] or "stage failed"

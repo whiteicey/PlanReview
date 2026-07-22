@@ -1,16 +1,37 @@
+# Python and test caches
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
 .venv/
+*.egg-info/
+
+# Local-only editor and assistant data
 .claude/
-storage/
-graphify-out/
+.superpowers/
+CLAUDE.md
 *.orig
+
+# Credentials and private configuration
+.env
+.env.*
+!*.example
+/configs/secrets*
+/llm_config.json
+
+# Local runtime state and generated review data (root only)
+/storage/
+/runtime/
+/artifacts/
+/uploads/
+/reports/
 *.db
+*.sqlite
 *.sqlite3
 *.log
-configs/secrets*
-llm_config.json
-.env
-*.egg-info/
-CLAUDE.md
+
+# Release artifacts are stored outside this repository
+*.zip
+*.zip.sha256
+
+# Generated knowledge graph cache
+graphify-out/

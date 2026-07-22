@@ -27,3 +27,11 @@ class UnknownOperatorError(ReviewError):
 
 class ParseError(ReviewError):
     pass
+
+
+class UnsafeDocxPackageError(ReviewError):
+    """The upload is not a supported, safely structured DOCX package."""
+
+
+class DocxResourceLimitError(ReviewError):
+    """The DOCX exceeds a configured archive or parser resource limit."""

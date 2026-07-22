@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from collections.abc import Callable
 
 from app.domain.enums import RuleStatus
 from app.domain.schemas import ParameterFact, RuleDefinition, RuleResult, SourceSpan
 from app.rules.evidence import apply_evidence_gate
 from app.rules.operators import OperatorContext, get_operator
+from app.rules.semantic import build_semantic_index
 
 
 class RuleEngine:
@@ -18,12 +20,23 @@ class RuleEngine:
         rules: list[RuleDefinition],
         facts: list[ParameterFact],
         spans: list[SourceSpan],
+        *,
+        observer: Callable[[str, RuleDefinition, list[RuleResult]], None] | None = None,
     ) -> list[RuleResult]:
-        context = OperatorContext(facts=facts, spans=spans)
+        # Build once per run and share with only the V1.2 operators. Existing
+        # operators remain behaviorally unchanged because they ignore it.
+        context = OperatorContext(
+            facts=facts,
+            spans=spans,
+            semantic_index=build_semantic_index(facts, spans),
+        )
         results: list[RuleResult] = []
         for rule in rules:
             if not rule.enabled:
                 continue
+            if observer is not None:
+                observer("started", rule, [])
+            rule_results: list[RuleResult] = []
             parameters = rule.params.get("parameters")
             if isinstance(parameters, list) and parameters:
                 parameter_sets = [
@@ -33,7 +46,7 @@ class RuleEngine:
                 parameter_sets = [rule.params]
             for params in parameter_sets:
                 outcome = apply_evidence_gate(get_operator(rule.operator)(context, params), rule)
-                results.append(
+                rule_results.append(
                     RuleResult(
                         rule_id=rule.rule_id,
                         rule_version=rule.version,
@@ -50,4 +63,7 @@ class RuleEngine:
                         details=deepcopy(outcome.details),
                     )
                 )
+            results.extend(rule_results)
+            if observer is not None:
+                observer("completed", rule, list(rule_results))
         return results

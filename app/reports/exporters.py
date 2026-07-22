@@ -11,7 +11,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from docx import Document
 from openpyxl import Workbook
 
-from app.domain.enums import Origin, ReviewStatus, Severity
+from app.domain.enums import FindingCategory, Origin, ReviewStatus, Severity
 from app.review.pipeline import ReviewRun
 from app.settings import get_settings
 
@@ -19,12 +19,12 @@ _FINDING_COLUMNS = (
     "finding_id", "origin", "category", "severity", "title", "description",
     "suggestion", "location", "evidence_span_ids", "review_status", "human_note",
 )
+_RULE_COLUMNS = ("rule_id", "category", "message", "evidence_span_ids")
+_EVIDENCE_COLUMNS = ("span_id", "evidence_text", "location", "file_name")
+_ILLEGAL_EXCEL_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 _HASH_RE = re.compile(r"[0-9a-f]{64}\Z")
 _SAFE_LABEL = re.compile(r"[A-Za-z0-9_.:-]{1,128}\Z")
-_ALLOWED_CATEGORIES = frozenset({
-    "capacity", "completeness", "consistency", "version-change", "traceability",
-    "unknown", "other",
-})
+_ALLOWED_CATEGORIES = tuple(FindingCategory)
 
 
 def _finding_locations(run: ReviewRun, item) -> str:
@@ -57,17 +57,79 @@ def _rows(run: ReviewRun) -> list[dict[str, str | None]]:
     ]
 
 
-def export_excel(run: ReviewRun, target: Path) -> Path:
+def safe_excel_cell(value):
+    """Return an Excel-safe external value without changing typed scalars."""
+    if not isinstance(value, str):
+        return value
+    cleaned = _ILLEGAL_EXCEL_CONTROL_CHARS.sub("", value)
+    if cleaned.startswith(("=", "+", "-", "@")):
+        return "'" + cleaned
+    return cleaned
+
+
+def _append_external_row(sheet, values) -> None:
+    sheet.append([safe_excel_cell(value) for value in values])
+
+
+def _assert_formula_free(workbook: Workbook) -> None:
+    """This exporter intentionally has no system-authored formulas."""
+    for sheet in workbook.worksheets:
+        for row in sheet.iter_rows():
+            for cell in row:
+                if cell.data_type == "f":
+                    raise ValueError("export workbook must not contain formulas")
+
+
+def export_excel(
+    run: ReviewRun,
+    target: Path,
+    *,
+    evidence_texts: dict[str, str] | None = None,
+    evidence_file_names: dict[str, str] | None = None,
+) -> Path:
     """Write editable review-state rows and evidence references to a spreadsheet."""
     target = _prepare_target(target)
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Findings"
-    sheet.append([get_settings().disclaimer])
-    sheet.append(_FINDING_COLUMNS)
+    _append_external_row(sheet, [get_settings().disclaimer])
+    _append_external_row(sheet, _FINDING_COLUMNS)
     for row in _rows(run):
-        sheet.append([row[column] for column in _FINDING_COLUMNS])
+        _append_external_row(sheet, [row[column] for column in _FINDING_COLUMNS])
     sheet.freeze_panes = "A3"
+
+    rules_sheet = workbook.create_sheet("Rules")
+    _append_external_row(rules_sheet, _RULE_COLUMNS)
+    for result in run.rule_results:
+        _append_external_row(
+            rules_sheet,
+            (
+                result.rule_id,
+                result.category,
+                result.message,
+                ", ".join(result.evidence_span_ids),
+            ),
+        )
+
+    evidence_sheet = workbook.create_sheet("Evidence")
+    _append_external_row(evidence_sheet, _EVIDENCE_COLUMNS)
+    texts = evidence_texts or {}
+    file_names = evidence_file_names or {}
+    referenced_span_ids = dict.fromkeys(
+        span_id for finding in run.findings for span_id in finding.evidence_span_ids
+    )
+    for span_id in referenced_span_ids:
+        _append_external_row(
+            evidence_sheet,
+            (
+                span_id,
+                texts.get(span_id, ""),
+                run.evidence_locations.get(span_id, ""),
+                file_names.get(span_id, ""),
+            ),
+        )
+
+    _assert_formula_free(workbook)
     workbook.save(target)
     return target
 
@@ -197,8 +259,10 @@ def _opaque_enum(value, enum_type, field_name: str) -> str:
     return f"{enum_type.__name__.lower()}-{list(enum_type).index(member) + 1:04d}"
 
 
-def _opaque_category(value: str) -> str:
+def _opaque_category(value: str | FindingCategory) -> str:
     """Map the finite supported category taxonomy to opaque aliases."""
-    if value not in _ALLOWED_CATEGORIES:
-        return "category-unknown"
-    return f"category-{sorted(_ALLOWED_CATEGORIES).index(value) + 1:04d}"
+    try:
+        category = value if isinstance(value, FindingCategory) else FindingCategory(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("category is not an approved taxonomy value") from exc
+    return f"category-{_ALLOWED_CATEGORIES.index(category) + 1:04d}"

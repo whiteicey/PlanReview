@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
 from functools import reduce
 from operator import mul
@@ -11,12 +12,18 @@ from typing import Any, Callable
 from app.domain.enums import BlockType, RuleStatus
 from app.domain.exceptions import UnknownOperatorError
 from app.domain.schemas import ParameterFact, SourceSpan
+from app.domain.units import UnitMetadata, get_unit_metadata
+from app.rules.semantic import SemanticIndex
+
+_MAX_FINDING_EVIDENCE_SPANS = 5
+_MAX_STRUCTURE_EVIDENCE_SPANS = 3
 
 
 @dataclass(frozen=True)
 class OperatorContext:
     facts: list[ParameterFact]
     spans: list[SourceSpan]
+    semantic_index: SemanticIndex | None = None
 
 
 @dataclass(frozen=True)
@@ -34,15 +41,46 @@ def _unique(items: list[str]) -> list[str]:
 
 
 def _fact_ids(facts: list[ParameterFact]) -> list[str]:
-    return _unique([fact.fact_id for fact in facts])
+    return _unique(
+        [identifier for fact in facts for identifier in [fact.fact_id, *fact.merged_fact_ids]]
+    )
 
 
 def _span_ids(spans: list[SourceSpan]) -> list[str]:
     return _unique([span.span_id for span in spans])
 
 
+def _structure_anchors(spans: list[SourceSpan]) -> list[SourceSpan]:
+    """Return a small, stable document-structure witness for absence checks.
+
+    A missing section or attachment has no direct source text.  The title tree
+    is therefore useful context, but the complete document is not evidence for
+    a single absence claim.  Keep only heading anchors and allow an empty list
+    when no structural anchor is available.
+    """
+    return [
+        span for span in spans if span.block_type is BlockType.HEADING
+    ][:_MAX_STRUCTURE_EVIDENCE_SPANS]
+
+
+def _section_matches(query: str, path: str) -> bool:
+    """Match a configured section without ordinary substring false positives."""
+    query = query.strip()
+    path = path.strip()
+    if not query or not path:
+        return False
+    if query == path:
+        return True
+    if re.fullmatch(r"\d+(?:\.\d+)*", query):
+        return re.search(rf"(?<![\d.]){re.escape(query)}(?![\d.])", path) is not None
+    tokens = [token for token in re.split(r"[\s/:：()（）,，;；]+", path) if token]
+    return any(token.startswith(query) or token.endswith(query) for token in tokens)
+
+
 def _fact_span_ids(facts: list[ParameterFact]) -> list[str]:
-    return _unique([fact.source_span_id for fact in facts])
+    return _unique(
+        [span_id for fact in facts for span_id in [fact.source_span_id, *fact.merged_span_ids]]
+    )
 
 
 def _outcome(
@@ -54,12 +92,20 @@ def _outcome(
 ) -> OperatorOutcome:
     facts = facts or []
     spans = spans or []
+    evidence_span_ids = _unique(_fact_span_ids(facts) + _span_ids(spans))
+    bounded_evidence = evidence_span_ids[:_MAX_FINDING_EVIDENCE_SPANS]
+    normalized_details = dict(details or {})
+    if len(evidence_span_ids) > len(bounded_evidence):
+        normalized_details["evidence_trimmed_count"] = (
+            len(evidence_span_ids) - len(bounded_evidence)
+        )
+        normalized_details["evidence_limit"] = _MAX_FINDING_EVIDENCE_SPANS
     return OperatorOutcome(
         status=status,
         message=message,
-        evidence_span_ids=_unique(_fact_span_ids(facts) + _span_ids(spans)),
+        evidence_span_ids=bounded_evidence,
         involved_fact_ids=_fact_ids(facts),
-        details=details or {},
+        details=normalized_details,
     )
 
 
@@ -163,12 +209,31 @@ def _one_complete_fact_per_operand(
         return None, gathered
     selected: list[ParameterFact] = []
     for group in groups:
-        complete = [fact for fact in group if _usable([fact])]
+        complete = [
+            fact
+            for fact in group
+            if _usable([fact])
+            and get_unit_metadata(fact.canonical_unit, fact.unit_category) is not None
+        ]
+        if len(complete) != len(group):
+            return None, gathered
         values = {fact.normalized_value for fact in complete}
-        if len(values) != 1:
+        if not complete or len(values) != 1:
             return None, gathered
         selected.append(complete[0])
     return selected, gathered
+
+
+def _compatible_unit_metadata(facts: list[ParameterFact]) -> list[UnitMetadata] | None:
+    """Resolve complete physical metadata and require one shared dimension."""
+
+    metadata = [get_unit_metadata(fact.canonical_unit, fact.unit_category) for fact in facts]
+    if not facts or any(item is None for item in metadata):
+        return None
+    resolved = [item for item in metadata if item is not None]
+    if len({item.dimension for item in resolved}) != 1:
+        return None
+    return resolved
 
 
 def required_sections_exist(context: OperatorContext, params: dict[str, Any]) -> OperatorOutcome:
@@ -176,19 +241,19 @@ def required_sections_exist(context: OperatorContext, params: dict[str, Any]) ->
     if not isinstance(required, list) or not required or not all(
         isinstance(section, str) and section for section in required
     ):
-        return _unknown("缺少有效章节配置", spans=context.spans)
+        return _unknown("缺少有效章节配置", spans=_structure_anchors(context.spans))
 
     found = [part for span in context.spans for part in span.section_path]
     missing = [
         section
         for section in required
-        if not any(section == part or section in part for part in found)
+        if not any(_section_matches(section, part) for part in found)
     ]
     return _outcome(
         RuleStatus.FAIL if missing else RuleStatus.PASS,
         "缺少章节" if missing else "章节齐全",
-        spans=context.spans,
-        details={"missing": missing},
+        spans=_structure_anchors(context.spans) if missing else [],
+        details={"missing": missing, "evidence_source": "structure_index"},
     )
 
 
@@ -197,8 +262,11 @@ def required_parameter_table_exists(
 ) -> OperatorOutcome:
     needle = params.get("section_contains")
     if not isinstance(needle, str) or not needle:
-        return _unknown("缺少参数表章节配置", spans=context.spans)
-    relevant = [span for span in context.spans if any(needle in section for section in span.section_path)]
+        return _unknown("缺少参数表章节配置", spans=_structure_anchors(context.spans))
+    relevant = [
+        span for span in context.spans
+        if any(_section_matches(needle, section) for section in span.section_path)
+    ]
     cells = [span for span in relevant if span.block_type is BlockType.TABLE_CELL]
     return _outcome(
         RuleStatus.PASS if cells else RuleStatus.FAIL,
@@ -235,8 +303,15 @@ def sum_equals(context: OperatorContext, params: dict[str, Any]) -> OperatorOutc
     if selected is None:
         return _unknown("缺少完整且唯一的求和事实", gathered)
     target_fact, *component_facts = selected
+    if _compatible_unit_metadata(selected) is None:
+        return _unknown("求和事实的单位不兼容", selected)
     total = sum(fact.normalized_value for fact in component_facts)
-    matches = total == target_fact.normalized_value
+    matches = math.isclose(
+        total,
+        target_fact.normalized_value,
+        rel_tol=1e-6,
+        abs_tol=1e-9,
+    )
     return _outcome(
         RuleStatus.PASS if matches else RuleStatus.FAIL,
         "求和一致" if matches else "求和不一致",
@@ -271,10 +346,29 @@ def product_approximately_equals(
     if selected is None:
         return _unknown("缺少完整且唯一的乘积事实", gathered)
     *left_facts, right_fact = selected
+    right_metadata = get_unit_metadata(right_fact.canonical_unit, right_fact.unit_category)
+    left_metadata = [
+        get_unit_metadata(fact.canonical_unit, fact.unit_category) for fact in left_facts
+    ]
+    if right_metadata is None or any(item is None for item in left_metadata):
+        return _unknown("乘积事实的单位不完整", selected)
+    resolved_left = [item for item in left_metadata if item is not None]
+    count_operands = [item for item in resolved_left if item.category == "count"]
+    measured_operands = [item for item in resolved_left if item.category != "count"]
+    if (
+        len(count_operands) != 1
+        or not measured_operands
+        or right_metadata.category == "count"
+        or any(item.dimension != right_metadata.dimension for item in measured_operands)
+    ):
+        return _unknown("乘积事实的物理维度不兼容", selected)
     product = reduce(mul, (fact.normalized_value for fact in left_facts), 1.0)
-    difference = abs(product - right_fact.normalized_value)
-    allowed = abs(right_fact.normalized_value) * relative_tolerance
-    matches = difference <= allowed
+    matches = math.isclose(
+        product,
+        right_fact.normalized_value,
+        rel_tol=relative_tolerance,
+        abs_tol=1e-9,
+    )
     return _outcome(
         RuleStatus.PASS if matches else RuleStatus.FAIL,
         "乘积近似一致" if matches else "乘积不一致",
@@ -296,12 +390,104 @@ def less_or_equal(context: OperatorContext, params: dict[str, Any]) -> OperatorO
     if selected is None:
         return _unknown("缺少完整且唯一的容量比较事实", gathered)
     left_fact, right_fact = selected
+    if _compatible_unit_metadata(selected) is None:
+        return _unknown("比较事实的单位不兼容", selected)
     matches = left_fact.normalized_value <= right_fact.normalized_value
     return _outcome(
         RuleStatus.PASS if matches else RuleStatus.FAIL,
         "不超能力" if matches else "超过处理能力",
         selected,
     )
+
+
+_CHANGE_PARAMETER_HEADERS = frozenset({"参数", "参数名称", "指标"})
+_CHANGE_OLD_VALUE_HEADERS = frozenset({"原值", "调整前"})
+_CHANGE_NEW_VALUE_HEADERS = frozenset({"新值", "调整后"})
+_CHANGE_REASON_HEADERS = frozenset({"变更原因", "调整原因", "说明"})
+_INVALID_CHANGE_REASONS = frozenset(
+    {"未说明", "无", "无原因", "不详", "原因不明", "待补充"}
+)
+
+
+def _change_reason_table_result(
+    spans: list[SourceSpan], parameter: str
+) -> tuple[RuleStatus, list[SourceSpan]] | None:
+    table_cells = [
+        span
+        for span in spans
+        if span.block_type is BlockType.TABLE_CELL
+        and span.table_index is not None
+        and span.row_index is not None
+        and span.column_index is not None
+    ]
+    tables: dict[tuple[str, int], list[SourceSpan]] = {}
+    for cell in table_cells:
+        tables.setdefault((cell.document_id, cell.table_index), []).append(cell)
+
+    relevant_tables = [cells for cells in tables.values() if any(parameter in cell.text for cell in cells)]
+    if not relevant_tables:
+        return None
+
+    matched_rows: list[list[SourceSpan]] = []
+    for cells in relevant_tables:
+        rows: dict[int, dict[int, SourceSpan]] = {}
+        for cell in cells:
+            rows.setdefault(cell.row_index, {}).setdefault(cell.column_index, cell)
+
+        header_row_index: int | None = None
+        parameter_column = old_column = new_column = reason_column = None
+        for row_index in sorted(rows):
+            row = rows[row_index]
+            headings = {column: cell.text.strip() for column, cell in row.items()}
+            parameter_columns = [col for col, text in headings.items() if text in _CHANGE_PARAMETER_HEADERS]
+            old_columns = [col for col, text in headings.items() if text in _CHANGE_OLD_VALUE_HEADERS]
+            new_columns = [col for col, text in headings.items() if text in _CHANGE_NEW_VALUE_HEADERS]
+            reason_columns = [col for col, text in headings.items() if text in _CHANGE_REASON_HEADERS]
+            if parameter_columns and old_columns and new_columns and reason_columns:
+                header_row_index = row_index
+                parameter_column = parameter_columns[0]
+                old_column = old_columns[0]
+                new_column = new_columns[0]
+                reason_column = reason_columns[0]
+                break
+        if header_row_index is None:
+            return (RuleStatus.UNKNOWN, cells)
+
+        assert parameter_column is not None and reason_column is not None
+        assert old_column is not None and new_column is not None
+        for row_index in sorted(rows):
+            if row_index <= header_row_index:
+                continue
+            row = rows[row_index]
+            parameter_cell = row.get(parameter_column)
+            if parameter_cell is None or parameter not in parameter_cell.text:
+                continue
+            # Presence of both before/after columns is part of a reliable change row.
+            if row.get(old_column) is None or row.get(new_column) is None:
+                return (RuleStatus.UNKNOWN, list(row.values()))
+            matched_rows.append(list(row.values()))
+
+    if not matched_rows:
+        return (RuleStatus.UNKNOWN, [cell for cells in relevant_tables for cell in cells])
+
+    evidence: list[SourceSpan] = []
+    all_valid = True
+    for row in matched_rows:
+        cells_by_id: dict[str, SourceSpan] = {}
+        for cell in row:
+            cells_by_id.setdefault(cell.span_id, cell)
+        deduplicated = list(cells_by_id.values())
+        evidence.extend(deduplicated)
+        table_key = (row[0].document_id, row[0].table_index)
+        table = tables[table_key]
+        header = next(
+            cell for cell in table if cell.text.strip() in _CHANGE_REASON_HEADERS
+        )
+        reason = next((cell for cell in deduplicated if cell.column_index == header.column_index), None)
+        reason_text = reason.text.strip() if reason is not None else ""
+        if not reason_text or reason_text in _INVALID_CHANGE_REASONS:
+            all_valid = False
+    return (RuleStatus.PASS if all_valid else RuleStatus.FAIL, evidence)
 
 
 def change_requires_reason(context: OperatorContext, params: dict[str, Any]) -> OperatorOutcome:
@@ -353,8 +539,21 @@ def change_requires_reason(context: OperatorContext, params: dict[str, Any]) -> 
     scanned_spans = [
         span
         for span in context.spans
-        if any(section in path for section in response_sections for path in span.section_path)
+        if any(
+            _section_matches(section, path)
+            for section in response_sections
+            for path in span.section_path
+        )
     ]
+    table_result = _change_reason_table_result(scanned_spans, parameter)
+    if table_result is not None:
+        table_status, table_evidence = table_result
+        messages = {
+            RuleStatus.PASS: "变更有原因",
+            RuleStatus.FAIL: "变更缺少原因",
+            RuleStatus.UNKNOWN: "变更表格缺少可靠表头或完整行",
+        }
+        return _outcome(table_status, messages[table_status], facts, table_evidence)
     absence_phrases = (
         "无原因",
         "无理由",
@@ -393,10 +592,10 @@ def issue_response_status_exists(
     if not isinstance(terms, list) or not terms or not all(
         isinstance(term, str) and term for term in terms
     ):
-        return _unknown("缺少有效意见状态配置", spans=context.spans)
+        return _unknown("缺少有效意见状态配置", spans=_structure_anchors(context.spans))
     tables = _reply_status_tables(context, params)
     if tables is None or not tables:
-        return _unknown("缺少审查意见回复表", spans=context.spans)
+        return _unknown("缺少审查意见回复表", spans=_structure_anchors(context.spans))
     present = [
         row["status"]
         for table in tables
@@ -410,8 +609,11 @@ def issue_response_status_exists(
 
 
 def alias_normalization(context: OperatorContext, params: dict[str, Any]) -> OperatorOutcome:
-    canonical_name = params.get("canonical_name")
+    canonical_name = params.get("parameter") or params.get("canonical_name")
     aliases = params.get("aliases", [])
+    aliases_by_parameter = params.get("aliases_by_parameter")
+    if isinstance(aliases_by_parameter, dict) and isinstance(canonical_name, str):
+        aliases = aliases_by_parameter.get(canonical_name, [])
     if (
         not isinstance(canonical_name, str)
         or not canonical_name
@@ -419,32 +621,73 @@ def alias_normalization(context: OperatorContext, params: dict[str, Any]) -> Ope
         or not all(isinstance(alias, str) and alias for alias in aliases)
     ):
         return _unknown("缺少有效术语归一配置")
-    canonical_facts = _named_facts(context, canonical_name)
-    if canonical_facts:
-        return _outcome(RuleStatus.PASS, "术语已归一", canonical_facts)
-    alias_facts = [fact for fact in context.facts if fact.raw_name in aliases]
+    relevant_facts = [
+        fact
+        for fact in context.facts
+        if fact.raw_name == canonical_name or fact.raw_name in aliases
+    ]
+    if not relevant_facts:
+        return _unknown("未找到术语事实")
+    alias_facts = [fact for fact in relevant_facts if fact.raw_name in aliases]
     if alias_facts:
         return _outcome(RuleStatus.FAIL, "术语未归一", alias_facts)
-    return _unknown("未找到术语事实")
+    return _outcome(RuleStatus.PASS, "术语已归一", relevant_facts)
 
 
 def evidence_required(context: OperatorContext, params: dict[str, Any]) -> OperatorOutcome:
     minimum = params.get("min_evidence")
     if isinstance(minimum, bool):
-        return _unknown("最小证据数无效", spans=context.spans)
+        return _unknown("最小证据数无效", spans=_structure_anchors(context.spans))
     try:
         required = int(minimum)
     except (TypeError, ValueError):
-        return _unknown("最小证据数无效", spans=context.spans)
+        return _unknown("最小证据数无效", spans=_structure_anchors(context.spans))
     if required < 1:
-        return _unknown("最小证据数无效", spans=context.spans)
-    if not context.spans:
-        return _unknown("证据不足")
+        return _unknown("最小证据数无效", spans=_structure_anchors(context.spans))
+    parameter = params.get("parameter")
+    parameters = params.get("parameters")
+    if isinstance(parameter, str) and parameter:
+        names = {parameter}
+    elif isinstance(parameters, list) and parameters and all(
+        isinstance(name, str) and name for name in parameters
+    ):
+        names = set(parameters)
+    elif parameter is None and parameters is None:
+        names = None
+    else:
+        return _unknown("缺少有效证据参数配置")
+
+    relevant = [
+        fact
+        for fact in context.facts
+        if names is None or fact.canonical_name in names or fact.raw_name in names
+    ]
+    if not relevant:
+        return _unknown("缺少相关证据事实")
+
+    span_by_id = {span.span_id: span for span in context.spans if span.span_id}
+    valid_facts = [fact for fact in relevant if fact.source_span_id in span_by_id]
+    missing_span_fact_ids = [fact.fact_id for fact in relevant if not fact.source_span_id]
+    invalid_fact_ids = [
+        fact.fact_id
+        for fact in relevant
+        if fact.source_span_id and fact.source_span_id not in span_by_id
+    ]
+    details = {
+        "required": required,
+        "available": len({fact.source_span_id for fact in valid_facts}),
+        "invalid_fact_ids": invalid_fact_ids,
+        "missing_span_fact_ids": missing_span_fact_ids,
+    }
+    if missing_span_fact_ids or invalid_fact_ids:
+        return _outcome(RuleStatus.FAIL, "事实缺少有效证据定位", valid_facts, details=details)
+    evidence_ids = {fact.source_span_id for fact in valid_facts}
+    status = RuleStatus.PASS if len(evidence_ids) >= required else RuleStatus.FAIL
     return _outcome(
-        RuleStatus.PASS if len(context.spans) >= required else RuleStatus.FAIL,
-        "证据充分" if len(context.spans) >= required else "证据不足",
-        spans=context.spans,
-        details={"required": required, "available": len(context.spans)},
+        status,
+        "证据充分" if status is RuleStatus.PASS else "证据不足",
+        valid_facts,
+        details=details,
     )
 
 
@@ -481,7 +724,7 @@ def _reply_status_tables(
         and span.table_index is not None
         and span.row_index is not None
         and span.column_index is not None
-        and any(section_contains in part for part in span.section_path)
+        and any(_section_matches(section_contains, part) for part in span.section_path)
     ]
     tables: list[list[dict[str, Any]]] = []
     for table_index in sorted({span.table_index for span in cells}):
@@ -529,9 +772,9 @@ def reply_table_status_complete(
     """
     tables = _reply_status_tables(context, params)
     if tables is None:
-        return _unknown("缺少有效回复表配置", spans=context.spans)
+        return _unknown("缺少有效回复表配置", spans=_structure_anchors(context.spans))
     if not tables:
-        return _unknown("缺少审查意见回复表", spans=context.spans)
+        return _unknown("缺少审查意见回复表", spans=_structure_anchors(context.spans))
 
     failing: list[SourceSpan] = []
     for table in tables:
@@ -574,7 +817,7 @@ def prose_alias_unnormalized(
 
     paragraphs = [span for span in context.spans if span.block_type is BlockType.PARAGRAPH]
     if not paragraphs:
-        return _unknown("缺少正文段落", spans=context.spans)
+        return _unknown("缺少正文段落", spans=_structure_anchors(context.spans))
 
     failing: list[SourceSpan] = []
     for _, aliases in entries:
@@ -600,11 +843,17 @@ _OPERATORS: dict[str, Callable[[OperatorContext, dict[str, Any]], OperatorOutcom
     "reply_table_status_complete": reply_table_status_complete,
     "prose_alias_unnormalized": prose_alias_unnormalized,
 }
-OPERATOR_REGISTRY = _OPERATORS
+OPERATOR_REGISTRY = dict(_OPERATORS)
 OPERATOR_NAMES = frozenset(_OPERATORS)
 
 
 def get_operator(name: str) -> Callable[[OperatorContext, dict[str, Any]], OperatorOutcome]:
+    if name not in OPERATOR_REGISTRY:
+        # Lazy import avoids a circular dependency: V1.2 operators reuse the
+        # context/outcome contracts defined above.
+        from app.rules.v12_operators import V12_OPERATORS
+
+        OPERATOR_REGISTRY.update(V12_OPERATORS)
     try:
         return OPERATOR_REGISTRY[name]
     except KeyError as exc:

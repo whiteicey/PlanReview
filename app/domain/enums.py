@@ -17,10 +17,38 @@ class ReviewStatus(str, Enum):
     RESOLVED = "resolved"
 
 
+class LLMStatus(str, Enum):
+    NOT_RUN = "NOT_RUN"
+    COMPLETED = "COMPLETED"
+    COMPLETED_PARTIAL = "COMPLETED_PARTIAL"
+    CONFIGURATION_ERROR = "CONFIGURATION_ERROR"
+    PROVIDER_ERROR = "PROVIDER_ERROR"
+    INPUT_LIMIT_EXCEEDED = "INPUT_LIMIT_EXCEEDED"
+    VALIDATION_FAILED = "VALIDATION_FAILED"
+
+
 class Severity(str, Enum):
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
+
+
+class FindingCategory(str, Enum):
+    COMPLETENESS = "completeness"
+    CONSISTENCY = "consistency"
+    AGGREGATION = "aggregation"
+    CROSS_DOMAIN = "cross_domain"
+    CAPACITY = "capacity"
+    VERSION_CHANGE = "version_change"
+    TERMINOLOGY = "terminology"
+    EVIDENCE = "evidence"
+    TRACEABILITY = "traceability"
+    UNKNOWN_SCOPE = "unknown_scope"
+    OTHER = "other"
+
+    @classmethod
+    def _missing_(cls, value):
+        return {"version-change": cls.VERSION_CHANGE, "unknown": cls.UNKNOWN_SCOPE}.get(value)
 
 
 class Origin(str, Enum):

@@ -10,10 +10,14 @@ def test_defaults_to_mock_when_provider_is_mock():
     assert isinstance(provider, MockProvider)
 
 
-def test_falls_back_to_mock_when_anthropic_config_incomplete():
-    # Missing key or base_url -> Mock, never a half-configured online call.
-    assert isinstance(build_provider(LLMConfig(provider="anthropic", base_url="https://x/anthropic", model="m"), api_key=None), MockProvider)
-    assert isinstance(build_provider(LLMConfig(provider="anthropic", base_url=None, model="m"), api_key="k"), MockProvider)
+def test_incomplete_anthropic_config_is_explicit_and_never_falls_back_to_mock():
+    from app.llm.factory import ConfigurationErrorProvider
+
+    assert isinstance(build_provider(LLMConfig(provider="anthropic", base_url="https://x/anthropic", model="m"), api_key=None), ConfigurationErrorProvider)
+    assert isinstance(build_provider(LLMConfig(provider="anthropic", base_url=None, model="m"), api_key="k"), ConfigurationErrorProvider)
+    assert isinstance(build_provider(LLMConfig(provider="anthropic", base_url="https://x/anthropic", model=None), api_key="k"), ConfigurationErrorProvider)
+    assert isinstance(build_provider(LLMConfig(provider="invalid", configuration_error="bad"), api_key=None), ConfigurationErrorProvider)
+    assert isinstance(build_provider(LLMConfig(provider="anthropic", base_url="ftp://invalid", model="m"), api_key="k"), ConfigurationErrorProvider)
 
 
 def test_builds_anthropic_adapter_when_fully_configured():

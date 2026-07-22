@@ -1,0 +1,5 @@
+﻿{
+    "command":  "C:\\Users\\连浚杰\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe -m pytest --collect-only -q",
+    "captured_at":  "2026-07-22T10:11:55.6362521+08:00",
+    "exit_code":  0
+}

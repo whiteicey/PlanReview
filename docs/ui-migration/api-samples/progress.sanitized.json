@@ -1,0 +1,773 @@
+{
+  "events": [
+    {
+      "created_at": "2026-07-21T19:05:47.157775",
+      "details": {},
+      "event_type": "TASK_CREATED",
+      "message": "<redacted-progress-message-1>",
+      "sequence": 1,
+      "stage": "INPUT_VALIDATION",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.184708",
+      "details": {},
+      "event_type": "STAGE_STARTED",
+      "message": "<redacted-progress-message-2>",
+      "sequence": 2,
+      "stage": "INPUT_VALIDATION",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.211739",
+      "details": {
+        "document_role": "<redacted>",
+        "document_status": "<redacted>"
+      },
+      "event_type": "STAGE_COMPLETED",
+      "message": "<redacted-progress-message-3>",
+      "sequence": 3,
+      "stage": "INPUT_VALIDATION",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.223763",
+      "details": {},
+      "event_type": "STAGE_STARTED",
+      "message": "<redacted-progress-message-4>",
+      "sequence": 4,
+      "stage": "DOCUMENT_PARSE",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.239621",
+      "details": {
+        "cache_hit": true,
+        "section_count": 244,
+        "span_count": 1719,
+        "table_count": 45
+      },
+      "event_type": "STAGE_COMPLETED",
+      "message": "<redacted-progress-message-5>",
+      "sequence": 5,
+      "stage": "DOCUMENT_PARSE",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.261695",
+      "details": {},
+      "event_type": "STAGE_STARTED",
+      "message": "<redacted-progress-message-6>",
+      "sequence": 6,
+      "stage": "PARAMETER_EXTRACTION",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.310544",
+      "details": {
+        "parameter_count": 16
+      },
+      "event_type": "STAGE_COMPLETED",
+      "message": "<redacted-progress-message-7>",
+      "sequence": 7,
+      "stage": "PARAMETER_EXTRACTION",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.313986",
+      "details": {},
+      "event_type": "STAGE_STARTED",
+      "message": "<redacted-progress-message-8>",
+      "sequence": 8,
+      "stage": "PARAMETER_NORMALIZATION",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.329269",
+      "details": {
+        "deduplicated_fact_count": 0,
+        "normalized_fact_count": 16
+      },
+      "event_type": "STAGE_COMPLETED",
+      "message": "<redacted-progress-message-9>",
+      "sequence": 9,
+      "stage": "PARAMETER_NORMALIZATION",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.337503",
+      "details": {},
+      "event_type": "STAGE_STARTED",
+      "message": "<redacted-progress-message-10>",
+      "sequence": 10,
+      "stage": "RULE_CONFIG",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.343949",
+      "details": {
+        "applicable_rule_count": 18,
+        "not_applicable_rule_count": 0
+      },
+      "event_type": "STAGE_COMPLETED",
+      "message": "<redacted-progress-message-11>",
+      "sequence": 11,
+      "stage": "RULE_CONFIG",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.345976",
+      "details": {
+        "applicable_rule_count": 18,
+        "completed_rule_count": 0
+      },
+      "event_type": "STAGE_STARTED",
+      "message": "<redacted-progress-message-12>",
+      "sequence": 12,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.354257",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-13>",
+      "sequence": 13,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.492421",
+      "details": {
+        "completed_rule_count": 1,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-14>",
+      "sequence": 14,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.501184",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-15>",
+      "sequence": 15,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.528772",
+      "details": {
+        "completed_rule_count": 2,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-16>",
+      "sequence": 16,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.536060",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-17>",
+      "sequence": 17,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.545314",
+      "details": {
+        "completed_rule_count": 3,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-18>",
+      "sequence": 18,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.554295",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-19>",
+      "sequence": 19,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.562865",
+      "details": {
+        "completed_rule_count": 4,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-20>",
+      "sequence": 20,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.570440",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-21>",
+      "sequence": 21,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.578423",
+      "details": {
+        "completed_rule_count": 5,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-22>",
+      "sequence": 22,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.586440",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-23>",
+      "sequence": 23,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.590569",
+      "details": {
+        "completed_rule_count": 6,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-24>",
+      "sequence": 24,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.590569",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-25>",
+      "sequence": 25,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.608003",
+      "details": {
+        "completed_rule_count": 7,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-26>",
+      "sequence": 26,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.615936",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-27>",
+      "sequence": 27,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.627193",
+      "details": {
+        "completed_rule_count": 8,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-28>",
+      "sequence": 28,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.643195",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-29>",
+      "sequence": 29,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.649420",
+      "details": {
+        "completed_rule_count": 9,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-30>",
+      "sequence": 30,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.653925",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-31>",
+      "sequence": 31,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.659044",
+      "details": {
+        "completed_rule_count": 10,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-32>",
+      "sequence": 32,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.659044",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-33>",
+      "sequence": 33,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.692534",
+      "details": {
+        "completed_rule_count": 11,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-34>",
+      "sequence": 34,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.700514",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-35>",
+      "sequence": 35,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.711479",
+      "details": {
+        "completed_rule_count": 12,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-36>",
+      "sequence": 36,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.718332",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-37>",
+      "sequence": 37,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.719612",
+      "details": {
+        "completed_rule_count": 13,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-38>",
+      "sequence": 38,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.732877",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-39>",
+      "sequence": 39,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.737412",
+      "details": {
+        "completed_rule_count": 14,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-40>",
+      "sequence": 40,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.747180",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-41>",
+      "sequence": 41,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.754026",
+      "details": {
+        "completed_rule_count": 15,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-42>",
+      "sequence": 42,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.762827",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-43>",
+      "sequence": 43,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.771676",
+      "details": {
+        "completed_rule_count": 16,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-44>",
+      "sequence": 44,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.779251",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-45>",
+      "sequence": 45,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.786461",
+      "details": {
+        "completed_rule_count": 17,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-46>",
+      "sequence": 46,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.793986",
+      "details": {
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_STARTED",
+      "message": "<redacted-progress-message-47>",
+      "sequence": 47,
+      "stage": "RULE_CHECK",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.798208",
+      "details": {
+        "completed_rule_count": 18,
+        "result": "PASS",
+        "rule_id": "<redacted>"
+      },
+      "event_type": "RULE_COMPLETED",
+      "message": "<redacted-progress-message-48>",
+      "sequence": 48,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.804448",
+      "details": {
+        "applicable_rule_count": 18,
+        "completed_rule_count": 18
+      },
+      "event_type": "STAGE_COMPLETED",
+      "message": "<redacted-progress-message-49>",
+      "sequence": 49,
+      "stage": "RULE_CHECK",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:47.814933",
+      "details": {},
+      "event_type": "STAGE_STARTED",
+      "message": "<redacted-progress-message-50>",
+      "sequence": 50,
+      "stage": "AI_EVIDENCE",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:05:48.594115",
+      "details": {
+        "ai_coverage_ratio": 28.4,
+        "available_span_count": 1719,
+        "batch_count": 5,
+        "coverage_ratio": 0.2839,
+        "selected_character_count": 69221,
+        "selected_span_count": 488
+      },
+      "event_type": "STAGE_COMPLETED",
+      "message": "<redacted-progress-message-51>",
+      "sequence": 51,
+      "stage": "AI_EVIDENCE",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:05:48.605595",
+      "details": {
+        "batch_count": 5,
+        "provider": "<redacted>"
+      },
+      "event_type": "STAGE_STARTED",
+      "message": "<redacted-progress-message-52>",
+      "sequence": 52,
+      "stage": "AI_REVIEW",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:06:34.794514",
+      "details": {
+        "batch_count": 5,
+        "batch_index": 1,
+        "candidate_count": 8,
+        "rejected_count": 0,
+        "selected_character_count": 14778,
+        "selected_span_count": 111,
+        "valid_count": 8
+      },
+      "event_type": "AI_BATCH_COMPLETED",
+      "message": "<redacted-progress-message-53>",
+      "sequence": 53,
+      "stage": "AI_REVIEW",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:07:13.911783",
+      "details": {
+        "batch_count": 5,
+        "batch_index": 2,
+        "candidate_count": 8,
+        "rejected_count": 0,
+        "selected_character_count": 14747,
+        "selected_span_count": 120,
+        "valid_count": 8
+      },
+      "event_type": "AI_BATCH_COMPLETED",
+      "message": "<redacted-progress-message-54>",
+      "sequence": 54,
+      "stage": "AI_REVIEW",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:07:59.622605",
+      "details": {
+        "batch_count": 5,
+        "batch_index": 3,
+        "candidate_count": 8,
+        "rejected_count": 0,
+        "selected_character_count": 13589,
+        "selected_span_count": 119,
+        "valid_count": 8
+      },
+      "event_type": "AI_BATCH_COMPLETED",
+      "message": "<redacted-progress-message-55>",
+      "sequence": 55,
+      "stage": "AI_REVIEW",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:09:08.635347",
+      "details": {
+        "batch_count": 5,
+        "batch_index": 4,
+        "candidate_count": 8,
+        "rejected_count": 0,
+        "selected_character_count": 13405,
+        "selected_span_count": 101,
+        "valid_count": 8
+      },
+      "event_type": "AI_BATCH_COMPLETED",
+      "message": "<redacted-progress-message-56>",
+      "sequence": 56,
+      "stage": "AI_REVIEW",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:10:13.653385",
+      "details": {
+        "batch_count": 5,
+        "batch_index": 5,
+        "candidate_count": 8,
+        "rejected_count": 0,
+        "selected_character_count": 12702,
+        "selected_span_count": 82,
+        "valid_count": 8
+      },
+      "event_type": "AI_BATCH_COMPLETED",
+      "message": "<redacted-progress-message-57>",
+      "sequence": 57,
+      "stage": "AI_REVIEW",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:10:13.665396",
+      "details": {
+        "batch_count": 5,
+        "candidate_count": 40,
+        "rejected_count": 0,
+        "valid_count": 40
+      },
+      "event_type": "STAGE_COMPLETED",
+      "message": "<redacted-progress-message-58>",
+      "sequence": 58,
+      "stage": "AI_REVIEW",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:10:13.673156",
+      "details": {
+        "candidate_count": 40,
+        "rejected_count": 0,
+        "valid_count": 40
+      },
+      "event_type": "STAGE_COMPLETED",
+      "message": "<redacted-progress-message-59>",
+      "sequence": 59,
+      "stage": "AI_VALIDATION",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:10:13.680156",
+      "details": {},
+      "event_type": "STAGE_STARTED",
+      "message": "<redacted-progress-message-60>",
+      "sequence": 60,
+      "stage": "RECONCILIATION",
+      "status": "running"
+    },
+    {
+      "created_at": "2026-07-21T19:10:13.717064",
+      "details": {
+        "deduplicated_finding_count": 39,
+        "final_finding_count": 25,
+        "llm_finding_count": 40,
+        "premerge_finding_count": 64,
+        "rule_finding_count": 24
+      },
+      "event_type": "STAGE_COMPLETED",
+      "message": "<redacted-progress-message-61>",
+      "sequence": 61,
+      "stage": "RECONCILIATION",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:10:13.724216",
+      "details": {
+        "needs_human_review": true
+      },
+      "event_type": "STAGE_COMPLETED",
+      "message": "<redacted-progress-message-62>",
+      "sequence": 62,
+      "stage": "HUMAN_REVIEW",
+      "status": "completed"
+    },
+    {
+      "created_at": "2026-07-21T19:10:13.731201",
+      "details": {
+        "final_finding_count": 25
+      },
+      "event_type": "TASK_COMPLETED",
+      "message": "<redacted-progress-message-63>",
+      "sequence": 63,
+      "stage": "HUMAN_REVIEW",
+      "status": "completed"
+    }
+  ],
+  "last_sequence": 63,
+  "run_id": "<run-id>",
+  "run_status": "READY_FOR_HUMAN_REVIEW"
+}

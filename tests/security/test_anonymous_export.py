@@ -26,7 +26,7 @@ def test_anonymous_package_excludes_identity_source_paths_and_raw_documents(tmp_
             Finding(
                 finding_id="F1",
                 origin=Origin.RULE,
-                category="c",
+                category="other",
                 severity=Severity.HIGH,
                 title="Safe finding",
                 description="The process receives 220 units per day and stores output in a covered tank.",
@@ -48,7 +48,7 @@ def test_anonymous_package_excludes_identity_source_paths_and_raw_documents(tmp_
         payload = json.loads(text)
 
     assert payload["findings"][0]["evidence_span_ids"] == ["evidence-0001"]
-    assert payload["findings"][0]["category"] == "category-unknown"
+    assert payload["findings"][0]["category"] == "category-0011"
     assert payload["findings"][0]["severity"] == "severity-0001"
     assert "description" not in payload["findings"][0]
     assert payload["evidence_text_hashes"] == {"evidence-0001": "b" * 64}
@@ -65,7 +65,7 @@ def test_anonymous_package_omits_hash_record_when_legacy_run_lacks_hash(tmp_path
             Finding(
                 finding_id="F1",
                 origin=Origin.RULE,
-                category="c",
+                category="other",
                 severity=Severity.HIGH,
                 title="t",
                 evidence_span_ids=["span-1"],

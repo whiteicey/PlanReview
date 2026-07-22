@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from app.domain.enums import (
     BlockType,
     ExtractionMethod,
+    FindingCategory,
     OnMissing,
     Origin,
     PipelineStage,
@@ -41,6 +42,7 @@ class ParameterFact(BaseModel):
     normalized_type: str | None = None
     raw_unit: str | None = None
     canonical_unit: str | None = None
+    unit_category: str | None = None
     subject: str | None = None
     time_scope: str | None = None
     statistical_scope: str | None = None
@@ -49,6 +51,8 @@ class ParameterFact(BaseModel):
     source_version: str | None = None
     source_span_id: str
     extraction_method: ExtractionMethod
+    merged_fact_ids: list[str] = Field(default_factory=list)
+    merged_span_ids: list[str] = Field(default_factory=list)
     confidence: float = 1.0
     human_status: ReviewStatus = ReviewStatus.PENDING
 
@@ -74,7 +78,7 @@ class RuleDefinition(BaseModel):
     rule_id: str
     version: str
     name: str
-    category: str
+    category: FindingCategory
     severity: Severity
     operator: str
     on_missing: OnMissing
@@ -94,11 +98,12 @@ class StageRecord(BaseModel):
 
 
 class RuleResult(BaseModel):
+    run_id: str | None = None
     rule_id: str
     rule_version: str | None = None
     status: RuleStatus
     severity: Severity
-    category: str
+    category: FindingCategory
     parameter: str | None = None
     message: str = ""
     evidence_span_ids: list[str] = Field(default_factory=list)
@@ -108,9 +113,10 @@ class RuleResult(BaseModel):
 
 
 class Finding(BaseModel):
+    run_id: str | None = None
     finding_id: str
     origin: Origin
-    category: str
+    category: FindingCategory
     severity: Severity
     parameter: str | None = None
     title: str
@@ -121,4 +127,8 @@ class Finding(BaseModel):
     needs_human_review: bool
     review_status: ReviewStatus = ReviewStatus.PENDING
     human_note: str | None = None
+    reviewed_at: datetime | None = None
+    is_expert_experience: bool = False
+    experience_saved_at: datetime | None = None
+    experience_updated_at: datetime | None = None
     original_ai_snapshot: dict[str, Any] = Field(default_factory=dict)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.domain.enums import Origin, RuleStatus, Severity
 from app.domain.schemas import Finding, RuleResult
 from app.review.reconcile import merge_findings, rule_results_to_findings
@@ -84,9 +86,8 @@ def test_category_is_not_over_normalized_for_deduplication() -> None:
     first = rr(RuleStatus.FAIL)
     second = rr(RuleStatus.FAIL, "R2").model_copy(update={"category": "capacity!"})
 
-    merged = rule_results_to_findings([first, second], {"s1": None})
-
-    assert len(merged) == 2
+    with pytest.raises(ValueError):
+        rule_results_to_findings([first, second], {"s1": None})
 
 
 def test_duplicate_llm_findings_are_deduplicated_without_losing_evidence() -> None:
@@ -102,6 +103,24 @@ def test_duplicate_llm_findings_are_deduplicated_without_losing_evidence() -> No
     assert len(merged) == 1
     assert merged[0].origin is Origin.LLM
     assert merged[0].evidence_span_ids == ["s1", "s2"]
+
+
+def test_finding_evidence_merge_is_bounded_and_records_trim_count() -> None:
+    first = Finding(
+        finding_id="L1", origin=Origin.LLM, category="capacity", severity=Severity.HIGH,
+        parameter="peak", title="peak review", description="d", suggestion="s",
+        evidence_span_ids=[f"s{index}" for index in range(4)], needs_human_review=True,
+    )
+    second = first.model_copy(
+        update={"finding_id": "L2", "evidence_span_ids": [f"s{index}" for index in range(3, 8)]}
+    )
+
+    merged = merge_findings([], [first, second])
+
+    assert len(merged) == 1
+    assert merged[0].evidence_span_ids == ["s0", "s1", "s2", "s3", "s4"]
+    assert merged[0].original_ai_snapshot["evidence_merge_trimmed_count"] == 3
+    assert merged[0].original_ai_snapshot["evidence_limit"] == 5
 
 
 def test_pass_results_do_not_become_findings() -> None:

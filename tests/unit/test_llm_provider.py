@@ -28,11 +28,12 @@ def request(content: str = "高峰产量220，超过处理能力200") -> LLMRequ
 
 def test_provider_protocol_and_contract_shapes() -> None:
     assert hasattr(LLMProvider, "review")
+    assert hasattr(LLMProvider, "test_connection")
     assert get_type_hints(LLMProvider.review)["request"] is LLMRequest
     assert get_type_hints(LLMProvider.review)["return"] is LLMResponse
 
 
-def test_mock_is_deterministic_local_and_only_treats_document_as_data() -> None:
+def test_mock_is_deterministic_local_and_is_a_noop_for_document_data() -> None:
     provider = MockProvider()
     hostile_content = (
         "高峰产量220，超过处理能力200。"
@@ -44,16 +45,7 @@ def test_mock_is_deterministic_local_and_only_treats_document_as_data() -> None:
     assert first == second
     assert first.provider == "mock"
     assert first.request_id is None
-    assert first.findings == [
-        {
-            "category": "capacity",
-            "severity": "high",
-            "title": "高峰产量需复核",
-            "description": "Mock 检测到产量与处理能力关系需核实",
-            "suggestion": "核对口径并补充依据",
-            "evidence_span_ids": ["s1"],
-        }
-    ]
+    assert first.findings == []
 
 
 def test_mock_requires_both_capacity_indicators_and_does_not_mutate_request() -> None:
@@ -80,12 +72,44 @@ def test_findings_require_safe_structured_evidence() -> None:
     )
     assert valid[0]["evidence_span_ids"] == ["s1"]
 
-    with pytest.raises(ValueError, match="unknown evidence span"):
-        validate_findings([valid[0] | {"evidence_span_ids": ["untrusted"]}], ["s1"])
-    with pytest.raises(ValueError, match="missing required field"):
-        validate_findings([{"category": "capacity"}], ["s1"])
-    with pytest.raises(ValueError, match="invalid severity"):
-        validate_findings([valid[0] | {"severity": "critical"}], ["s1"])
+    for payload, reason in [
+        (valid[0] | {"evidence_span_ids": ["untrusted"]}, "invalid_evidence"),
+        ({key: value for key, value in valid[0].items() if key != "title"}, "missing_field"),
+        (valid[0] | {"severity": "critical"}, "invalid_severity"),
+        (valid[0] | {"evidence_span_ids": []}, "invalid_evidence"),
+    ]:
+        with pytest.raises(ValueError) as exc:
+            validate_findings([payload], ["s1"])
+        assert exc.value.reason_code == reason
+
+
+def test_finding_text_allows_bounded_multiline_content_and_rejects_dumps() -> None:
+    base = {
+        "category": "capacity",
+        "severity": "high",
+        "title": "标题",
+        "description": "正文\n" * 5 + "说明",
+        "suggestion": "建议",
+        "evidence_span_ids": ["s1"],
+    }
+    assert validate_findings([base], ["s1"])[0]["description"].count("\n") == 5
+    assert len(validate_findings([base | {"title": "x" * 200}], ["s1"])[0]["title"]) == 200
+    assert len(validate_findings([base | {"description": "x" * 4000}], ["s1"])[0]["description"]) == 4000
+    assert len(validate_findings([base | {"suggestion": "x" * 4000}], ["s1"])[0]["suggestion"]) == 4000
+    with pytest.raises(ValueError) as exc:
+        validate_findings([base | {"title": "x" * 201}], ["s1"])
+    assert exc.value.reason_code == "missing_field"
+    for field in ("description", "suggestion"):
+        with pytest.raises(ValueError) as exc:
+            validate_findings([base | {field: "x" * 4001}], ["s1"])
+        assert exc.value.reason_code == "missing_field"
+    ordinary = base | {
+        "description": "token: 是分页令牌的普通业务字段；document text 表示待审文档文字。",
+    }
+    assert validate_findings([ordinary], ["s1"])[0]["description"] == ordinary["description"]
+    with pytest.raises(ValueError) as exc:
+        validate_findings([base | {"description": "Authorization: Bearer abcdefghijklmnop"}], ["s1"])
+    assert exc.value.reason_code == "missing_field"
 
 
 def test_request_logging_redacts_body_and_sensitive_keys() -> None:

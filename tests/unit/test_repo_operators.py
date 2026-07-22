@@ -122,6 +122,26 @@ def test_reply_table_status_complete_unknown_without_table() -> None:
     assert outcome.status is RuleStatus.UNKNOWN
 
 
+def test_missing_reply_table_never_uses_all_document_spans_as_evidence() -> None:
+    headings = [
+        SourceSpan(
+            span_id=f"h{index}",
+            document_id="D",
+            section_path=[f"{index} heading"],
+            block_type=BlockType.HEADING,
+            text=f"{index} heading",
+            text_hash="h",
+        )
+        for index in range(4)
+    ]
+    spans = headings + [paragraph(f"body {index}", sid=f"p{index}") for index in range(1713)]
+
+    outcome = run("reply_table_status_complete", spans=spans, params=REPLY_PARAMS)
+
+    assert outcome.status is RuleStatus.UNKNOWN
+    assert outcome.evidence_span_ids == ["h0", "h1", "h2"]
+
+
 def test_reply_table_status_complete_does_not_key_on_verdict_prose() -> None:
     # A paragraph literally naming a defect must not drive the outcome; only the
     # table structure does. Here the table is complete, so PASS despite the prose.

@@ -1,0 +1,26 @@
+[
+  {
+    "method": "GET",
+    "url": "/api/cases/<case-id>/runs/<run-id>",
+    "status": 200,
+    "count": 1
+  },
+  {
+    "method": "GET",
+    "url": "/api/runs/<run-id>/progress?after_sequence=0",
+    "status": 200,
+    "count": 1
+  },
+  {
+    "method": "GET",
+    "url": "/api/cases/<case-id>/runs/<run-id>/diagnostics",
+    "status": 200,
+    "count": 1
+  },
+  {
+    "method": "GET",
+    "url": "/api/cases/<case-id>/runs/<run-id>/findings",
+    "status": 200,
+    "count": 1
+  }
+]

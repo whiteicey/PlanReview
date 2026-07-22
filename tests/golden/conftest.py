@@ -1,9 +1,8 @@
-"""External DEMO golden-test adapter.
+"""Bundled DEMO golden-test adapter.
 
-The DEMO package is deliberately outside the repository.  This adapter reads it
-only when REVIEW_DEMO_ROOT explicitly names a package that contains the mapped
-DOCX and production rule assets; it never creates stand-in DOCX files or
-silently turns a missing package into a passing test.
+The release includes the DEMO package. ``REVIEW_DEMO_ROOT`` may explicitly
+override it with another complete package. This adapter never creates stand-in
+DOCX files or silently turns missing assets into a passing test.
 """
 
 from __future__ import annotations
@@ -64,9 +63,9 @@ def _load_cases() -> dict[str, dict[str, Any]]:
     }
 
 
-def _external_paths() -> dict[str, Path]:
+def _demo_paths() -> dict[str, Path]:
     if DEMO_ROOT is None or not DEMO_ROOT.is_dir():
-        pytest.skip("外部 DEMO 数据未提供")
+        pytest.skip("DEMO 数据包不可用")
     paths = {case: DEMO_ROOT / "plans" / name for case, name in DEMO_FILES.items()}
     required = [
         *paths.values(),
@@ -74,7 +73,7 @@ def _external_paths() -> dict[str, Path]:
         DEMO_ROOT / "rules" / "terminology-demo-0.1.yaml",
     ]
     if not all(path.is_file() for path in required):
-        pytest.skip("外部 DEMO 数据未提供")
+        pytest.skip("DEMO 数据包不完整")
     return paths
 
 
@@ -172,13 +171,13 @@ def run_golden_case(expected_cases: dict[str, dict[str, Any]]) -> Callable[[str]
         if case_id not in expected_cases:
             raise KeyError(f"unknown golden case: {case_id}")
         if case_id.startswith("G-00") and case_id not in {"G-005", "G-006", "G-007", "G-008"}:
-            paths = _external_paths()
+            paths = _demo_paths()
             document_keys = expected_cases[case_id]["documents"]
             document_paths = [paths[key] for key in document_keys]
             try:
                 imported = import_demo(document_paths[0])
             except DemoImportError as exc:
-                pytest.skip(f"外部 DEMO 数据未提供: {exc}")
+                pytest.skip(f"DEMO 数据包不可用: {exc}")
             documents = [
                 DocxParser().parse(path, document_id=key)
                 for key, path in zip(document_keys, document_paths, strict=True)

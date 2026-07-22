@@ -1,0 +1,83 @@
+{
+  "verified_at": "2026-07-20T22:00:00+08:00",
+  "source_git_sha": "c3f729a4e675a533d5173379fb56e5e9046f4e7e",
+  "service_url": "http://127.0.0.1:8765",
+  "service_pid": 27176,
+  "provider": "anthropic",
+  "model": "deepseek-v4-pro",
+  "base_url": "https://api.deepseek.com/anthropic",
+  "connection_test": {
+    "ok": true
+  },
+  "structured_output_test": {
+    "connection_ok": true,
+    "structured_output_ok": true,
+    "candidate_count": 1,
+    "valid_count": 1,
+    "rejected_count": 0
+  },
+  "verified_run": {
+    "case_id": "347f3cea-5c9f-421e-b525-d1ab63dac09b",
+    "run_id": "f8090a05-4ac4-4b94-b157-c268bc75e1a0",
+    "run_status": "READY_FOR_HUMAN_REVIEW",
+    "llm_status": "COMPLETED_PARTIAL",
+    "source_span_count": 135,
+    "available_span_count": 135,
+    "selected_span_count": 40,
+    "selected_character_count": 2610,
+    "coverage_ratio": 0.2963,
+    "candidate_count": 6,
+    "valid_count": 6,
+    "rejected_count": 0,
+    "rule_finding_count": 12,
+    "llm_finding_count": 6,
+    "final_finding_count": 18,
+    "event_count": 48,
+    "ai_request_duration_seconds": 57.563,
+    "http_status": 200,
+    "response_character_count": 2148,
+    "stop_reason": "end_turn",
+    "content_block_count": 2,
+    "refresh_replay_contiguous": true,
+    "ai_evidence_all_within_selected": true,
+    "expert_review_persisted_after_refresh": true
+  },
+  "request_contract": {
+    "api_flow": [
+      "POST /api/cases",
+      "POST /api/cases/{case_id}/review-jobs",
+      "GET /api/runs/{run_id}/progress?after_sequence=N"
+    ],
+    "background_async": true,
+    "selected_request_body_bytes": 6749,
+    "estimated_input_tokens": 1688,
+    "token_estimate_method": "ceil(serialized UTF-8 request bytes / 4)",
+    "prompt_template_sha256": "cedd789f112547ce549a5ed4d4b7cac03b79e92d22b95e0ddf30a2a29ff2fc46",
+    "schema_sha256": "1ea185c60454bc49699c7241a7736d264082dc4f1bb6c465b9cd18020d54f90e",
+    "normalized_selected_content_sha256": "c470466f75fe973f293ce901c70281dd37e4c59ab068717054111b2e082ea6b3",
+    "automatic_retry": false
+  },
+  "exports": {
+    "xlsx": {
+      "size": 11911,
+      "sha256": "ff37a532e033a1f198c64ebde420a15fd4c9b11b3994a69f4afbea561cf9e8f2"
+    },
+    "docx": {
+      "size": 38494,
+      "sha256": "af88a646cd89c6d59f92b26298e1759af4b19de8cea79475ff5d9a681019e795"
+    },
+    "anonymous": {
+      "size": 1663,
+      "sha256": "0aa4b29fc758b40ef4c537f2e0457391b63d8bdb6cd06d7a8606f3838eec6da6"
+    }
+  },
+  "security": {
+    "contains_api_key": false,
+    "contains_prompt": false,
+    "contains_raw_response": false,
+    "contains_document_body": false,
+    "contains_think_content": false,
+    "contains_traceback": false
+  },
+  "known_existing_gap": "Evidence click-to-source navigation is not implemented and is outside this UI task."
+}

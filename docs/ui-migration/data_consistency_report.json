@@ -1,0 +1,283 @@
+{
+  "api": {
+    "diagnostics_integrity": {
+      "batch_count": 5,
+      "candidate_ledger_entries": 119,
+      "candidate_ledger_truncated": false,
+      "distinct_rule_id_count": 18,
+      "finding_count": 25,
+      "packet_ledger_entries": 504,
+      "packet_ledger_truncated": false,
+      "rule_result_count": 29
+    },
+    "final_status": "READY_FOR_HUMAN_REVIEW",
+    "finding_count": 25,
+    "llm_status": "COMPLETED_PARTIAL"
+  },
+  "case_id": "<redacted-case-id>",
+  "checks": {
+    "api_finding_count": true,
+    "database_snapshot_unchanged": true,
+    "diagnostics_counts": true,
+    "stages_completed_in_database": true,
+    "xlsx_counts": true
+  },
+  "passed": true,
+  "replay_after": {
+    "batch_metrics": [
+      {
+        "batch_id": "v111-01",
+        "batch_index": null,
+        "stop_reason": "end_turn"
+      },
+      {
+        "batch_id": "v111-02",
+        "batch_index": null,
+        "stop_reason": "end_turn"
+      },
+      {
+        "batch_id": "v111-03",
+        "batch_index": null,
+        "stop_reason": "end_turn"
+      },
+      {
+        "batch_id": "v111-04",
+        "batch_index": null,
+        "stop_reason": "end_turn"
+      },
+      {
+        "batch_id": "v111-05",
+        "batch_index": null,
+        "stop_reason": "end_turn"
+      }
+    ],
+    "candidate_ledger": {
+      "ledger_entry_count": 119,
+      "ledger_size_bytes": 70778,
+      "ledger_truncated": false
+    },
+    "distinct_rule_ids": [
+      "CAPACITY-001",
+      "COMPLETENESS-001",
+      "COMPLETENESS-002",
+      "COMPLETENESS-003",
+      "CONSISTENCY-001",
+      "CONSISTENCY-002",
+      "CONSISTENCY-003",
+      "CROSS_SOURCE_PARAM-001",
+      "EQUIPMENT_REDUNDANCY-001",
+      "EVIDENCE-001",
+      "REFERENCE-001",
+      "SCHEDULE-001",
+      "SUMMARY_DETAIL-001",
+      "TERM-001",
+      "TERM-002",
+      "UNIT_MAGNITUDE-001",
+      "VERSION-001",
+      "VERSION-002"
+    ],
+    "final_status": "READY_FOR_HUMAN_REVIEW",
+    "finding_core_sha256": "b1abc9a4192f99cdca614a94d450e7410cc9aab32120858f6cf57912963a7111",
+    "finding_count": 25,
+    "finding_ids": [
+      "<finding-01>",
+      "<finding-02>",
+      "<finding-03>",
+      "<finding-04>",
+      "<finding-05>",
+      "<finding-06>",
+      "<finding-07>",
+      "<finding-08>",
+      "<finding-09>",
+      "<finding-10>",
+      "<finding-11>",
+      "<finding-12>",
+      "<finding-13>",
+      "<finding-14>",
+      "<finding-15>",
+      "<finding-16>",
+      "<finding-17>",
+      "<finding-18>",
+      "<finding-19>",
+      "<finding-20>",
+      "<finding-21>",
+      "<finding-22>",
+      "<finding-23>",
+      "<finding-24>",
+      "<finding-25>"
+    ],
+    "llm_status": "COMPLETED_PARTIAL",
+    "packet_ledger": {
+      "ledger_entry_count": 504,
+      "ledger_size_bytes": 531983,
+      "ledger_truncated": false
+    },
+    "rule_result_count": 29,
+    "run_count": 7,
+    "stage_records": [
+      {
+        "stage": "UPLOADED",
+        "status": "completed"
+      },
+      {
+        "stage": "PARSED",
+        "status": "completed"
+      },
+      {
+        "stage": "EXTRACTED",
+        "status": "completed"
+      },
+      {
+        "stage": "NORMALIZED",
+        "status": "completed"
+      },
+      {
+        "stage": "RULE_CHECKED",
+        "status": "completed"
+      },
+      {
+        "stage": "LLM_REVIEWED",
+        "status": "completed"
+      },
+      {
+        "stage": "RECONCILED",
+        "status": "completed"
+      },
+      {
+        "stage": "READY_FOR_HUMAN_REVIEW",
+        "status": "completed"
+      }
+    ]
+  },
+  "run_id": "<redacted-run-id>",
+  "source": {
+    "batch_metrics": [
+      {
+        "batch_id": "v111-01",
+        "batch_index": null,
+        "stop_reason": "end_turn"
+      },
+      {
+        "batch_id": "v111-02",
+        "batch_index": null,
+        "stop_reason": "end_turn"
+      },
+      {
+        "batch_id": "v111-03",
+        "batch_index": null,
+        "stop_reason": "end_turn"
+      },
+      {
+        "batch_id": "v111-04",
+        "batch_index": null,
+        "stop_reason": "end_turn"
+      },
+      {
+        "batch_id": "v111-05",
+        "batch_index": null,
+        "stop_reason": "end_turn"
+      }
+    ],
+    "candidate_ledger": {
+      "ledger_entry_count": 119,
+      "ledger_size_bytes": 70778,
+      "ledger_truncated": false
+    },
+    "distinct_rule_ids": [
+      "CAPACITY-001",
+      "COMPLETENESS-001",
+      "COMPLETENESS-002",
+      "COMPLETENESS-003",
+      "CONSISTENCY-001",
+      "CONSISTENCY-002",
+      "CONSISTENCY-003",
+      "CROSS_SOURCE_PARAM-001",
+      "EQUIPMENT_REDUNDANCY-001",
+      "EVIDENCE-001",
+      "REFERENCE-001",
+      "SCHEDULE-001",
+      "SUMMARY_DETAIL-001",
+      "TERM-001",
+      "TERM-002",
+      "UNIT_MAGNITUDE-001",
+      "VERSION-001",
+      "VERSION-002"
+    ],
+    "final_status": "READY_FOR_HUMAN_REVIEW",
+    "finding_core_sha256": "b1abc9a4192f99cdca614a94d450e7410cc9aab32120858f6cf57912963a7111",
+    "finding_count": 25,
+    "finding_ids": [
+      "<finding-01>",
+      "<finding-02>",
+      "<finding-03>",
+      "<finding-04>",
+      "<finding-05>",
+      "<finding-06>",
+      "<finding-07>",
+      "<finding-08>",
+      "<finding-09>",
+      "<finding-10>",
+      "<finding-11>",
+      "<finding-12>",
+      "<finding-13>",
+      "<finding-14>",
+      "<finding-15>",
+      "<finding-16>",
+      "<finding-17>",
+      "<finding-18>",
+      "<finding-19>",
+      "<finding-20>",
+      "<finding-21>",
+      "<finding-22>",
+      "<finding-23>",
+      "<finding-24>",
+      "<finding-25>"
+    ],
+    "llm_status": "COMPLETED_PARTIAL",
+    "packet_ledger": {
+      "ledger_entry_count": 504,
+      "ledger_size_bytes": 531983,
+      "ledger_truncated": false
+    },
+    "rule_result_count": 29,
+    "run_count": 7,
+    "stage_records": [
+      {
+        "stage": "UPLOADED",
+        "status": "completed"
+      },
+      {
+        "stage": "PARSED",
+        "status": "completed"
+      },
+      {
+        "stage": "EXTRACTED",
+        "status": "completed"
+      },
+      {
+        "stage": "NORMALIZED",
+        "status": "completed"
+      },
+      {
+        "stage": "RULE_CHECKED",
+        "status": "completed"
+      },
+      {
+        "stage": "LLM_REVIEWED",
+        "status": "completed"
+      },
+      {
+        "stage": "RECONCILED",
+        "status": "completed"
+      },
+      {
+        "stage": "READY_FOR_HUMAN_REVIEW",
+        "status": "completed"
+      }
+    ]
+  },
+  "xlsx": {
+    "finding_rows": 25,
+    "rule_rows": 29
+  }
+}

@@ -7,6 +7,8 @@ import re
 from app.domain.enums import Origin, RuleStatus
 from app.domain.schemas import Finding, RuleResult, SourceSpan
 
+_MAX_FINDING_EVIDENCE_SPANS = 5
+
 
 def _normalize_title(value: str) -> str:
     """Normalize title whitespace/case only; category identity is exact."""
@@ -27,14 +29,39 @@ def _rule_title(result: RuleResult) -> str:
     return result.message or f"规则 {result.rule_id} 需复核"
 
 
-def _deduplicated_evidence(*evidence_lists: list[str]) -> list[str]:
+def _deduplicated_evidence(*evidence_lists: list[str]) -> tuple[list[str], int]:
     seen: set[str] = set()
-    return [
+    evidence = [
         span_id
         for evidence in evidence_lists
         for span_id in evidence
         if not (span_id in seen or seen.add(span_id))
     ]
+    return evidence[:_MAX_FINDING_EVIDENCE_SPANS], max(
+        0, len(evidence) - _MAX_FINDING_EVIDENCE_SPANS
+    )
+
+
+def _merge_evidence_metadata(finding: Finding, trimmed_count: int) -> dict:
+    snapshot = dict(finding.original_ai_snapshot)
+    if trimmed_count:
+        snapshot["evidence_merge_trimmed_count"] = (
+            int(snapshot.get("evidence_merge_trimmed_count", 0)) + trimmed_count
+        )
+        snapshot["evidence_limit"] = _MAX_FINDING_EVIDENCE_SPANS
+    return snapshot
+
+
+def _bounded_finding_evidence(finding: Finding) -> Finding:
+    evidence, trimmed_count = _deduplicated_evidence(finding.evidence_span_ids)
+    if not trimmed_count:
+        return finding
+    return finding.model_copy(
+        update={
+            "evidence_span_ids": evidence,
+            "original_ai_snapshot": _merge_evidence_metadata(finding, trimmed_count),
+        }
+    )
 
 
 def rule_results_to_findings(
@@ -64,7 +91,7 @@ def rule_results_to_findings(
             description=result.message,
             suggestion="请补充证据并由专家复核",
             rule_id=result.rule_id,
-            evidence_span_ids=list(result.evidence_span_ids),
+            evidence_span_ids=_deduplicated_evidence(result.evidence_span_ids)[0],
             needs_human_review=(
                 result.needs_human_review or result.status is RuleStatus.UNKNOWN
             ),
@@ -75,12 +102,14 @@ def rule_results_to_findings(
             findings.append(finding)
             continue
         existing = findings[indexes[key]]
+        evidence, trimmed_count = _deduplicated_evidence(
+            existing.evidence_span_ids, finding.evidence_span_ids
+        )
         findings[indexes[key]] = existing.model_copy(
             update={
-                "evidence_span_ids": _deduplicated_evidence(
-                    existing.evidence_span_ids, finding.evidence_span_ids
-                ),
+                "evidence_span_ids": evidence,
                 "needs_human_review": existing.needs_human_review or finding.needs_human_review,
+                "original_ai_snapshot": _merge_evidence_metadata(existing, trimmed_count),
             }
         )
     return findings
@@ -98,14 +127,14 @@ def merge_findings(
     """
     if any(not finding.evidence_span_ids for finding in llm_findings):
         raise ValueError("LLM finding requires at least one evidence span")
-    merged = list(rule_findings)
+    merged = [_bounded_finding_evidence(finding) for finding in rule_findings]
     indexes = {_finding_key(finding): index for index, finding in enumerate(merged)}
     for llm_finding in llm_findings:
         key = _finding_key(llm_finding)
         index = indexes.get(key)
         if index is None:
             indexes[key] = len(merged)
-            merged.append(llm_finding)
+            merged.append(_bounded_finding_evidence(llm_finding))
             continue
 
         base = merged[index]
@@ -124,12 +153,14 @@ def merge_findings(
                 }
             )
         else:
+            evidence, trimmed_count = _deduplicated_evidence(
+                base.evidence_span_ids, llm_finding.evidence_span_ids
+            )
             merged[index] = base.model_copy(
                 update={
-                    "evidence_span_ids": _deduplicated_evidence(
-                        base.evidence_span_ids, llm_finding.evidence_span_ids
-                    ),
+                    "evidence_span_ids": evidence,
                     "needs_human_review": base.needs_human_review or llm_finding.needs_human_review,
+                    "original_ai_snapshot": _merge_evidence_metadata(base, trimmed_count),
                 }
             )
     return merged

@@ -1,6 +1,23 @@
+"use strict";
+
+const layoutController = globalThis.createLayoutController();
+layoutController.apply();
+
 const result = document.querySelector("#result");
+const resultComponent = document.querySelector("#result-component");
+const progressRoot = document.querySelector("#review-progress-root");
 const rulesetStatusEl = document.querySelector("#ruleset-status");
+const expertExperienceStatusEl = document.querySelector("#expert-experience-status");
+const loadExpertExperiencesEl = document.querySelector("#load-expert-experiences");
+const EXPERT_EXPERIENCE_PREFERENCE_KEY = "planreview.loadExpertExperiences.v1";
+const EXPERT_EXPERIENCE_RUNS_KEY = "planreview.expertExperienceRuns.v1";
 let currentCaseId = null;
+let currentRunId = null;
+let currentSummary = null;
+let currentFindings = [];
+let rulesetDefinitionCount = null;
+let currentRunDistinctRuleCount = null;
+let expertExperienceSummary = { total_count: 0, updated_at: null };
 
 const CATEGORY_LABELS = {
   consistency: "一致性",
@@ -11,7 +28,9 @@ const CATEGORY_LABELS = {
   terminology: "术语",
   completeness: "完整性",
   evidence: "证据",
+  traceability: "可追溯性",
   unknown_scope: "口径不明",
+  other: "其他",
 };
 
 const SEVERITY_LABELS = { high: "高", medium: "中", low: "低" };
@@ -41,11 +60,126 @@ function categoryLabel(category) {
   return CATEGORY_LABELS[category] || category || "其他";
 }
 
+function setText(id, value) {
+  const node = document.querySelector(`#${id}`);
+  if (node) node.textContent = value;
+}
+
+function metric(value, suffix = "") {
+  return value === null || value === undefined ? "—" : `${value}${suffix}`;
+}
+
+function formatBytes(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes)) return "—";
+  return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function stageLabel(stage) {
+  const labels = Object.fromEntries((globalThis.STAGES || []).map(([id, label]) => [id, label]));
+  return labels[stage] || stage || "等待启动";
+}
+
+function setWorkflowTab(value) {
+  const selected = value === "results" ? "results" : "progress";
+  for (const tab of document.querySelectorAll("[data-workflow-tab]")) {
+    tab.setAttribute("aria-selected", String(tab.dataset.workflowTab === selected));
+  }
+  progressRoot.hidden = selected !== "progress";
+  resultComponent.hidden = selected !== "results";
+}
+
+function renderProgressSummary(snapshot = {}) {
+  const status = snapshot.runStatus || "IDLE";
+  const statusLabel = ({ IDLE: "未开始", RUNNING: "执行中", READY_FOR_HUMAN_REVIEW: "待专家复核", FAILED: "失败", INTERRUPTED: "已中断" })[status] || status;
+  const pill = document.querySelector("#summary-status-pill");
+  if (pill) {
+    pill.textContent = statusLabel;
+    pill.className = `status-pill ${status === "RUNNING" ? "running" : status === "READY_FOR_HUMAN_REVIEW" ? "complete" : ["FAILED", "INTERRUPTED"].includes(status) ? "failed" : "idle"}`;
+  }
+  setText("summary-run-id", snapshot.runId || "—");
+  setText("summary-stage", stageLabel(snapshot.currentStage));
+  setText("summary-progress", `${Number(snapshot.progress || 0)}%`);
+  setText("summary-elapsed", snapshot.elapsed || "00:00");
+}
+
+function renderCompletedSummary(summary, findings, diagnostics) {
+  const view = globalThis.diagnosticsAdapter(summary, diagnostics, findings);
+  const severity = globalThis.severitySummary(findings);
+  currentSummary = summary;
+  currentFindings = findings;
+  setText("summary-llm", view.llmStatus || "—");
+  setText("result-count-badge", view.findingCount);
+  setText("result-summary-label", `${view.findingCount} 条最终问题`);
+  setText("diag-rule-results", metric(view.ruleResultCount, " 条"));
+  setText("diag-rule-ids", metric(view.distinctRuleIdCount, " 个"));
+  setText("diag-ai-candidates", metric(view.aiValidCandidateCount, " 条"));
+  setText("diag-batches", metric(view.batchCount, " 批"));
+  setText("diag-stages", view.stageRecordCount ? `阶段记录 ${view.stageRecordCount} 项` : "—");
+  setText("diag-packet-ledger", view.packetLedger.present ? `${metric(view.packetLedger.entryCount, " 条")} · ${formatBytes(view.packetLedger.sizeBytes)}${view.packetLedger.truncated ? " · 已截断" : ""}` : "—");
+  setText("diag-candidate-ledger", view.candidateLedger.present ? `${metric(view.candidateLedger.entryCount, " 条")} · ${formatBytes(view.candidateLedger.sizeBytes)}${view.candidateLedger.truncated ? " · 已截断" : ""}` : "—");
+  setText("severity-total", severity.total);
+  setText("severity-high", severity.high);
+  setText("severity-medium", severity.medium);
+  setText("severity-low", severity.low);
+  setText("origin-rule", view.originCounts.rule);
+  setText("origin-hybrid", view.originCounts.hybrid);
+  setText("origin-llm", view.originCounts.llm);
+  const selector = document.querySelector("#selector-version");
+  if (selector) {
+    selector.hidden = !view.selectorVersion;
+    selector.textContent = view.selectorVersion || "";
+  }
+  const total = Math.max(1, severity.total);
+  const highEnd = severity.high / total * 100;
+  const mediumEnd = highEnd + severity.medium / total * 100;
+  const donut = document.querySelector("#severity-donut");
+  if (donut) donut.style.background = severity.total ? `conic-gradient(var(--workbench-high) 0 ${highEnd}%, var(--workbench-medium) ${highEnd}% ${mediumEnd}%, var(--workbench-low) ${mediumEnd}% 100%)` : "var(--workbench-line)";
+  const preview = document.querySelector("#finding-preview");
+  if (preview) {
+    const labels = { high: "高", medium: "中", low: "低" };
+    preview.innerHTML = globalThis.prioritizeFindings(findings, 5).map((finding) => `<button type="button" class="preview-item" data-preview-finding="${escapeHtml(finding.finding_id)}"><span class="preview-severity ${escapeHtml(finding.severity)}">${labels[finding.severity] || "—"}</span><span><strong>${escapeHtml(finding.title)}</strong><small>${escapeHtml(globalThis.findingOriginLabel(finding.origin))}</small></span></button>`).join("") || '<p class="empty-preview">本次没有最终问题。</p>';
+  }
+}
+
+document.querySelector("#layout-mode")?.addEventListener("change", (event) => layoutController.setMode(event.target.value));
+document.querySelector(".workflow-tabs")?.addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-workflow-tab]");
+  if (tab) setWorkflowTab(tab.dataset.workflowTab);
+});
+document.querySelector("#view-all-findings")?.addEventListener("click", () => setWorkflowTab("results"));
+document.querySelector("#finding-preview")?.addEventListener("click", (event) => {
+  const findingId = event.target.closest("[data-preview-finding]")?.dataset.previewFinding;
+  if (!findingId) return;
+  setWorkflowTab("results");
+  document.querySelector(`[data-finding-id="${CSS.escape(findingId)}"]`)?.scrollIntoView({ block: "center" });
+});
+
+async function refreshServiceStatus() {
+  const node = document.querySelector("#service-status");
+  try {
+    const response = await fetch("/api/health");
+    if (!response.ok) throw new Error("health unavailable");
+    node.className = "service-status ok";
+    node.innerHTML = "<i></i>本地服务正常";
+  } catch (_) {
+    node.className = "service-status err";
+    node.innerHTML = "<i></i>本地服务不可用";
+  }
+}
+
 // --- Ruleset status / reload ---------------------------------------------
 
 function renderRulesetStatus(status) {
-  if (status && status.loaded) {
-    rulesetStatusEl.textContent = `已加载 ${status.rule_count} 条审查规则`;
+  if (status && Number.isFinite(Number(status.rule_count))) {
+    rulesetDefinitionCount = Number(status.rule_count);
+  }
+  if (status?.loaded || Number.isFinite(rulesetDefinitionCount)) {
+    const total = Number.isFinite(rulesetDefinitionCount) ? rulesetDefinitionCount : "—";
+    const enabled = Number.isFinite(currentRunDistinctRuleCount)
+      ? `${currentRunDistinctRuleCount}条`
+      : "待运行";
+    rulesetStatusEl.textContent = `规则库共${total}条，当前启用${enabled}`;
     rulesetStatusEl.className = "ruleset-status ok";
   } else {
     rulesetStatusEl.textContent = "未加载规则库（本次仅做 AI 复核）";
@@ -79,6 +213,95 @@ document.querySelector("#reload-ruleset").addEventListener("click", async () => 
   }
 });
 
+// --- Expert experience display-only library -----------------------------
+
+function readExpertExperienceRuns() {
+  try {
+    const value = JSON.parse(localStorage.getItem(EXPERT_EXPERIENCE_RUNS_KEY) || "{}");
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function rememberExpertExperienceRun(runId, summary) {
+  const runs = readExpertExperienceRuns();
+  runs[runId] = {
+    totalCount: Number(summary?.total_count || 0),
+    updatedAt: summary?.updated_at || null,
+  };
+  localStorage.setItem(EXPERT_EXPERIENCE_RUNS_KEY, JSON.stringify(runs));
+}
+
+function renderExpertExperienceStatus(summary, message = null) {
+  if (!expertExperienceStatusEl) return;
+  if (summary && Number.isFinite(Number(summary.total_count))) {
+    expertExperienceSummary = summary;
+    expertExperienceStatusEl.textContent = message || `已加载 ${Number(summary.total_count)} 条专家经验`;
+    expertExperienceStatusEl.className = "ruleset-status ok";
+    return;
+  }
+  expertExperienceStatusEl.textContent = message || "无法加载专家经验库";
+  expertExperienceStatusEl.className = "ruleset-status warn";
+}
+
+async function refreshExpertExperienceSummary() {
+  try {
+    const response = await fetch("/api/expert-experiences/summary");
+    if (!response.ok) throw new Error("experience summary unavailable");
+    const summary = await response.json();
+    renderExpertExperienceStatus(summary);
+    return summary;
+  } catch (_) {
+    renderExpertExperienceStatus(null);
+    return null;
+  }
+}
+
+function buildExpertExperienceDisplayItems(event, _caseId, runId) {
+  const plan = readExpertExperienceRuns()[runId];
+  if (!plan || event?.stage !== "RULE_CONFIG" || event?.event_type !== "STAGE_COMPLETED" || event?.status !== "completed") {
+    return [];
+  }
+  const total = Number(plan.totalCount || 0);
+  const base = {
+    sourceType: "EXPERT_EXPERIENCE_DISPLAY",
+    sequence: event.sequence,
+    createdAt: event.created_at,
+    stage: "RULE_CONFIG",
+    title: "专家经验库",
+    syntheticDisplayOnly: true,
+  };
+  return [
+    {
+      ...base,
+      displayId: `expert-experience:${runId}:loading`,
+      eventType: "EXPERT_EXPERIENCE_LOADING",
+      message: "正在加载专家经验库…",
+      status: "running",
+    },
+    {
+      ...base,
+      displayId: `expert-experience:${runId}:loaded`,
+      eventType: "EXPERT_EXPERIENCE_LOADED",
+      message: `专家经验库加载完成，当前共 ${total} 条专家经验`,
+      status: "completed",
+    },
+  ];
+}
+
+document.querySelector("#reload-expert-experiences")?.addEventListener("click", () => {
+  renderExpertExperienceStatus(null, "正在加载专家经验库…");
+  refreshExpertExperienceSummary();
+});
+
+if (loadExpertExperiencesEl) {
+  loadExpertExperiencesEl.checked = localStorage.getItem(EXPERT_EXPERIENCE_PREFERENCE_KEY) === "true";
+  loadExpertExperiencesEl.addEventListener("change", () => {
+    localStorage.setItem(EXPERT_EXPERIENCE_PREFERENCE_KEY, String(loadExpertExperiencesEl.checked));
+  });
+}
+
 // --- LLM config -----------------------------------------------------------
 
 const llmConfigStatus = document.querySelector("#llm-config-status");
@@ -91,6 +314,7 @@ async function loadLlmConfig() {
     document.querySelector("#llm-provider").value = config.provider || "mock";
     document.querySelector("#llm-base-url").value = config.base_url || "";
     document.querySelector("#llm-model").value = config.model || "";
+    document.querySelector("#llm-allow-private").checked = config.allow_private_endpoint === true;
     llmConfigStatus.textContent = config.key_present ? "已配置密钥 ✓" : "未配置密钥";
     llmConfigStatus.className = "llm-config-status" + (config.key_present ? " ok" : "");
   } catch (error) {
@@ -104,6 +328,7 @@ document.querySelector("#llm-save").addEventListener("click", async () => {
     provider: document.querySelector("#llm-provider").value,
     base_url: document.querySelector("#llm-base-url").value || null,
     model: document.querySelector("#llm-model").value || null,
+    allow_private_endpoint: document.querySelector("#llm-allow-private").checked,
     api_key: apiKeyEl.value || null,
   };
   llmConfigStatus.textContent = "保存中…";
@@ -130,7 +355,7 @@ document.querySelector("#llm-save").addEventListener("click", async () => {
 });
 
 document.querySelector("#llm-test").addEventListener("click", async () => {
-  llmConfigStatus.textContent = "正在测试连接…";
+  llmConfigStatus.textContent = "正在测试基础连接…";
   llmConfigStatus.className = "llm-config-status";
   try {
     const response = await fetch("/api/llm/health", { method: "POST" });
@@ -143,14 +368,34 @@ document.querySelector("#llm-test").addEventListener("click", async () => {
   }
 });
 
+document.querySelector("#llm-structured-test").addEventListener("click", async () => {
+  const statusEl = document.querySelector("#llm-structured-status");
+  statusEl.textContent = "正在测试结构化输出…";
+  statusEl.className = "llm-config-status";
+  const metric = (value) => value === null || value === undefined ? "—" : String(value);
+  try {
+    const response = await fetch("/api/llm/structured-output-test", { method: "POST" });
+    const body = await response.json().catch(() => ({}));
+    const counts = `候选 ${metric(body.candidate_count)} / 有效 ${metric(body.valid_count)} / 丢弃 ${metric(body.rejected_count)}`;
+    statusEl.textContent = `${body.detail || "结构化输出测试失败"}；${counts}`;
+    statusEl.className = "llm-config-status " + (body.structured_output_ok ? "ok" : "err");
+  } catch (error) {
+    statusEl.textContent = "无法连接本地服务";
+    statusEl.className = "llm-config-status err";
+  }
+});
+
 // --- Findings -------------------------------------------------------------
 
 function findingCard(finding) {
   const severity = SEVERITY_LABELS[finding.severity] || finding.severity || "";
-  const source = finding.origin === "llm" ? "AI 复核" : "规则";
+  const source = globalThis.findingOriginLabel(finding.origin);
   const humanReview = finding.needs_human_review ? '<span class="chip">需人工复核</span>' : "";
   const parameter = finding.parameter ? `<div class="row"><span class="key">相关参数</span><span>${escapeHtml(finding.parameter)}</span></div>` : "";
-  const evidence = `<div class="row"><span class="key">原文证据</span><span>${finding.evidence_span_ids.length} 处（导出报告可查看具体位置）</span></div>`;
+  const evidenceCount = Array.isArray(finding.evidence_span_ids) ? finding.evidence_span_ids.length : 0;
+  const evidence = evidenceCount
+    ? `<div class="row"><span class="key">原文证据</span><span>${evidenceCount} 处（导出报告可查看具体位置）</span></div>`
+    : `<div class="row"><span class="key">原文证据</span><span>未检索到对应内容</span></div>`;
   const statusLabel = REVIEW_STATUS_LABELS[finding.review_status] || finding.review_status || "待复核";
   const options = REVIEW_STATUS_OPTIONS
     .map(([value, label]) => `<option value="${value}"${value === finding.review_status ? " selected" : ""}>${label}</option>`)
@@ -174,6 +419,7 @@ function findingCard(finding) {
           <select data-role="review-status">${options}</select>
         </label>
         <textarea data-role="review-note" placeholder="复核备注（如需修改标题/严重度，请在此写明建议）" maxlength="4000">${escapeHtml(finding.human_note || "")}</textarea>
+        <label class="experience-finding-toggle"><input type="checkbox" data-role="expert-experience"${finding.is_expert_experience ? " checked" : ""}>将本次复核结论沉淀至专家经验库</label>
         <button type="button" data-role="save-review">保存复核</button>
         <span data-role="save-hint" class="save-hint"></span>
       </div>
@@ -184,17 +430,18 @@ async function saveReview(card) {
   const findingId = card.getAttribute("data-finding-id");
   const statusSelect = card.querySelector('[data-role="review-status"]');
   const noteBox = card.querySelector('[data-role="review-note"]');
+  const experienceBox = card.querySelector('[data-role="expert-experience"]');
   const hint = card.querySelector('[data-role="save-hint"]');
   hint.textContent = "保存中…";
   hint.className = "save-hint";
   try {
-    const response = await fetch(`/api/findings/${findingId}`, {
+    const response = await fetch(`/api/cases/${currentCaseId}/runs/${currentRunId}/findings/${findingId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        case_id: currentCaseId,
         review_status: statusSelect.value,
         human_note: noteBox.value ? noteBox.value : null,
+        is_expert_experience: experienceBox?.checked === true,
       }),
     });
     if (!response.ok) {
@@ -206,7 +453,11 @@ async function saveReview(card) {
     const updated = await response.json();
     card.querySelector('[data-role="status-label"]').textContent =
       REVIEW_STATUS_LABELS[updated.review_status] || updated.review_status;
-    hint.textContent = "已保存";
+    if (experienceBox) experienceBox.checked = updated.is_expert_experience === true;
+    renderExpertExperienceStatus({ total_count: updated.expert_experience_total_count });
+    hint.textContent = updated.expert_experience_saved
+      ? "专家复核结果已保存，并已沉淀至专家经验库"
+      : "专家复核结果已保存";
     hint.className = "save-hint ok";
   } catch (error) {
     hint.textContent = "无法连接本地服务";
@@ -221,29 +472,104 @@ result.addEventListener("click", (event) => {
   if (card) saveReview(card);
 });
 
-function renderResult(summary, findings) {
+function renderFailedReview(failure) {
+  const detail = failure?.failure_detail || "本次审查未完成，请重试或联系管理员。";
+  result.innerHTML = `
+    <div class="failure" role="alert">
+      <h2>本次审查未完成</h2>
+      <p>${escapeHtml(detail)}</p>
+    </div>`;
+  setText("result-summary-label", "运行失败");
+}
+
+function renderResult(summary, findings, diagnostics = {}) {
   currentCaseId = summary.case_id;
+  currentRunId = summary.run_id;
+  const uiState = globalThis.deriveReviewUiState(summary);
+  if (uiState.failed || !uiState.completed) {
+    renderFailedReview(summary);
+    return;
+  }
   const parts = [];
-  if (!summary.rules_loaded) {
-    parts.push('<div class="warn">未加载规则库，本次仅做 AI 复核。点击上方「加载 / 重新加载规则库」后重试，或联系管理员配置示例规则包。</div>');
-  } else {
+  parts.push(`<div class="summary-line">${escapeHtml(uiState.llmStatusLabel)}</div>`);
+  if (uiState.showPartialAiNotice) {
+    parts.push('<div class="warn">AI已复核部分重点证据，其余内容已完成确定性规则检查</div>');
+  }
+  if (uiState.showNoValidPreliminary) {
+    parts.push('<div class="warn">本次没有形成有效初审结果。规则库未加载，且AI复核未完成，请修复配置后重新审查。</div>');
+  } else if (uiState.showRuleOnlyNotice) {
+    parts.push('<div class="warn">当前问题清单仅包含确定性规则结果。</div>');
+  } else if (uiState.showAiOnlyNotice) {
+    parts.push('<div class="warn">未加载规则库，本次结果仅来自 AI 复核。</div>');
+  }
+  if (summary.rules_loaded) {
     parts.push(`<div class="summary-line">已应用 ${summary.rule_count} 条审查规则。</div>`);
   }
   parts.push(`<div class="summary-line">案例编号：${escapeHtml(summary.case_id)}　发现问题：${summary.finding_count} 条　提取参数：${summary.fact_count} 个</div>`);
-  parts.push(`
-    <div class="export-bar">
-      <a class="export-btn" href="/api/cases/${encodeURIComponent(summary.case_id)}/exports/xlsx">导出 Excel（含问题位置）</a>
-      <a class="export-btn" href="/api/cases/${encodeURIComponent(summary.case_id)}/exports/docx">导出 Word 报告</a>
-      <a class="export-btn ghost" href="/api/cases/${encodeURIComponent(summary.case_id)}/exports/anonymous">导出匿名包</a>
-    </div>`);
-  if (!findings.length) {
-    parts.push('<div class="empty">本次未发现规则可判定的问题。这并不代表方案完全正确，请仍由专家复核。</div>');
-  } else {
+  if (uiState.showExports) {
+    parts.push(`
+      <div class="export-bar">
+        <a class="export-btn" href="/api/cases/${encodeURIComponent(summary.case_id)}/exports/xlsx">导出 Excel（含问题位置）</a>
+        <a class="export-btn" href="/api/cases/${encodeURIComponent(summary.case_id)}/exports/docx">导出 Word 报告</a>
+        <a class="export-btn ghost" href="/api/cases/${encodeURIComponent(summary.case_id)}/exports/anonymous">导出匿名包</a>
+      </div>`);
+  }
+  if (uiState.showNoValidPreliminary) {
+    // There is no trustworthy result set to render or review.
+  } else if (uiState.showEmpty) {
+    parts.push('<div class="empty">本次初审未发现问题。这并不代表方案完全正确，请仍由专家复核。</div>');
+  } else if (uiState.showExpertReview) {
     parts.push(findings.map(findingCard).join(""));
   }
-  parts.push('<p class="foot">以上为 AI 初审结果，不是正式审查结论。请由具备资质的专家复核后再作决定。</p>');
+  if (uiState.showExpertReview) {
+    parts.push('<p class="foot">以上为初审结果，不是正式审查结论。请由具备资质的专家复核后再作决定。</p>');
+  }
   result.innerHTML = parts.join("");
+  renderCompletedSummary(summary, findings, diagnostics);
 }
+
+async function loadCompletedRun(progressState, caseId, runId) {
+  currentCaseId = caseId;
+  currentRunId = runId;
+  result.hidden = false;
+  if (["FAILED", "INTERRUPTED"].includes(progressState.runStatus)) {
+    renderFailedReview({
+      failure_detail: progressState.runStatus === "INTERRUPTED"
+        ? "上次审查因应用中断未完成，请重新运行。"
+        : "审查任务执行失败，请检查配置或重新运行。",
+    });
+    return;
+  }
+  try {
+    const [summaryResponse, findingsResponse, diagnosticsResponse] = await Promise.all([
+      fetch(`/api/cases/${encodeURIComponent(caseId)}/runs/${encodeURIComponent(runId)}`),
+      fetch(`/api/cases/${encodeURIComponent(caseId)}/runs/${encodeURIComponent(runId)}/findings`),
+      fetch(`/api/cases/${encodeURIComponent(caseId)}/runs/${encodeURIComponent(runId)}/diagnostics`).catch(() => null),
+    ]);
+    if (!summaryResponse.ok || !findingsResponse.ok) throw new Error("result unavailable");
+    const summary = await summaryResponse.json();
+    const findings = await findingsResponse.json();
+    const diagnostics = diagnosticsResponse?.ok ? await diagnosticsResponse.json() : {};
+    const diagnosticsView = globalThis.diagnosticsAdapter(summary, diagnostics, findings);
+    currentRunDistinctRuleCount = diagnosticsView.distinctRuleIdCount;
+    renderRulesetStatus({ loaded: summary.rules_loaded !== false });
+    summary.rules_loaded = Number(progressState.metrics.applicable_rule_count || 0) > 0;
+    summary.rule_count = Number(progressState.metrics.applicable_rule_count || 0);
+    renderResult(summary, findings, diagnostics);
+  } catch (_) {
+    renderFailedReview({ failure_detail: "初审已结束，但结果加载失败，请刷新页面重试。" });
+  }
+}
+
+const progressController = globalThis.createReviewProgressController(
+  document.querySelector("#review-progress-root"),
+  {
+    onTerminal: loadCompletedRun,
+    onPlaybackStart: () => { result.hidden = true; },
+    onStateChange: renderProgressSummary,
+    buildDisplayOnlyItems: buildExpertExperienceDisplayItems,
+  },
+);
 
 document.querySelector("#upload").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -262,20 +588,35 @@ document.querySelector("#upload").addEventListener("submit", async (event) => {
       result.textContent = uploaded.detail || "上传失败，请检查文件是否为 DOCX。";
       return;
     }
-    result.textContent = "正在执行初审，请稍候…";
-    const review = await fetch(`/api/cases/${uploaded.case_id}/review`, { method: "POST" });
-    const summary = await review.json();
+    setText("case-id-display", uploaded.case_id);
+    result.textContent = "正在创建智能初审任务…";
+    const review = await fetch(`/api/cases/${uploaded.case_id}/review-jobs`, { method: "POST" });
+    const accepted = await review.json();
     if (!review.ok) {
-      result.textContent = summary.detail || "初审失败。";
+      result.textContent = accepted.detail || "初审任务创建失败。";
       return;
     }
-    const findingsResponse = await fetch(`/api/cases/${uploaded.case_id}/findings`);
-    const findings = findingsResponse.ok ? await findingsResponse.json() : [];
-    renderResult(summary, findings);
+    result.textContent = "";
+    currentRunDistinctRuleCount = null;
+    renderRulesetStatus({ loaded: true });
+    if (loadExpertExperiencesEl?.checked) {
+      const summary = await refreshExpertExperienceSummary();
+      if (summary) rememberExpertExperienceRun(accepted.run_id, summary);
+    }
+    progressController.start(uploaded.case_id, accepted.run_id);
   } catch (error) {
     result.textContent = "无法连接本地服务，请确认服务已启动。";
   }
 });
 
 refreshRulesetStatus();
+refreshExpertExperienceSummary();
 loadLlmConfig();
+progressController.restore();
+refreshServiceStatus();
+
+document.querySelector("#file")?.addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  setText("file-name-display", file?.name || "尚未选择");
+  setText("file-size-display", file ? formatBytes(file.size) : "—");
+});

@@ -1,0 +1,12 @@
+{
+  "before_count": 581,
+  "after_count": 585,
+  "removed": [],
+  "added": [
+    "tests/unit/test_ui_horizontal_v12.py::test_horizontal_ui_assets_exist_and_load_once_in_dependency_order",
+    "tests/unit/test_ui_horizontal_v12.py::test_layout_does_not_create_a_second_polling_or_run_controller",
+    "tests/unit/test_ui_horizontal_v12.py::test_three_layout_modes_share_one_business_dom_and_one_progress_root",
+    "tests/unit/test_ui_horizontal_v12.py::test_v12_diagnostics_language_does_not_overclaim_stage_completion"
+  ],
+  "passed": true
+}

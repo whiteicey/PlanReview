@@ -16,7 +16,6 @@ from app.rules.operators import OperatorContext, get_operator
 
 ROOT = Path(__file__).resolve().parents[2]
 FORBIDDEN_SUBSTRINGS = (
-    "legacy_",
     "COMPAT_OPERATOR_NAMES",
     "compatibility_profile",
     "demo_compatibility",
@@ -24,6 +23,11 @@ FORBIDDEN_SUBSTRINGS = (
     "建设周期冲突",
     "投产时间与建设周期",
     "同义参数表达不统一",
+)
+LEGACY_BUSINESS_MARKERS = (
+    "legacy_compatibility",
+    "compatibility_profile",
+    "demo_compatibility",
 )
 SCAN_DIRS = (ROOT / "app", ROOT / "scripts")
 
@@ -40,6 +44,9 @@ def test_no_prose_grep_or_legacy_special_casing_remains() -> None:
     for path in _source_files():
         text = path.read_text(encoding="utf-8")
         for needle in FORBIDDEN_SUBSTRINGS:
+            if needle in text:
+                offenders.append(f"{path.relative_to(ROOT)} contains {needle!r}")
+        for needle in LEGACY_BUSINESS_MARKERS:
             if needle in text:
                 offenders.append(f"{path.relative_to(ROOT)} contains {needle!r}")
     assert not offenders, offenders

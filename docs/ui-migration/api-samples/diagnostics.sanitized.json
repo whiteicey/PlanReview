@@ -1,0 +1,1436 @@
+{
+  "ai_candidate_lifecycle_ledger": {
+    "entries": [],
+    "entries_redacted_for_sample": true,
+    "ledger_entry_count": 119,
+    "ledger_schema_version": "v1",
+    "ledger_size_bytes": 70778,
+    "ledger_truncated": false,
+    "summary": {
+      "decision:CONSTRUCTED": 40,
+      "decision:DEDUPLICATED": 39,
+      "decision:VALIDATED": 40,
+      "reason_code:DUPLICATE_FINDING": 39,
+      "stage:CONSTRUCTION": 40,
+      "stage:RECONCILIATION": 39,
+      "stage:VALIDATION": 40
+    }
+  },
+  "batch_metrics": [
+    {
+      "attempt_number": 1,
+      "batch_id": "v111-01",
+      "candidate_count": 8,
+      "character_count": 14778,
+      "content_block_count": 2,
+      "duration_seconds": 45.813,
+      "http_status": 200,
+      "llm_error_summary": null,
+      "packet_ids": [
+        "packet-0011",
+        "packet-0027",
+        "packet-0037",
+        "packet-0468",
+        "packet-0044",
+        "packet-0319",
+        "packet-0321",
+        "packet-0355",
+        "packet-0359",
+        "packet-0360",
+        "packet-0138",
+        "packet-0380",
+        "packet-0388",
+        "packet-0148",
+        "packet-0399",
+        "packet-0023",
+        "packet-0287",
+        "packet-0094",
+        "packet-0239",
+        "packet-0316",
+        "packet-0075",
+        "packet-0093",
+        "packet-0096",
+        "packet-0098",
+        "packet-0099",
+        "packet-0012",
+        "packet-0271",
+        "packet-0283"
+      ],
+      "packet_source_span_ids": {
+        "packet-0011": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:0:2"
+        ],
+        "packet-0012": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:1:2"
+        ],
+        "packet-0023": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:3:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:3:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:3:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:3:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:5:0"
+        ],
+        "packet-0027": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:5:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:5:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:5:0:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:5:0:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:43",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:330"
+        ],
+        "packet-0037": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:4:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:4:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:4:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:4:3"
+        ],
+        "packet-0044": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:7:5:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:7:5:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:7:5:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:9:2:0"
+        ],
+        "packet-0075": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:0:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:0:3"
+        ],
+        "packet-0093": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:1:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:1:3"
+        ],
+        "packet-0094": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:2:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:2:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:2:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:2:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:23:1:1"
+        ],
+        "packet-0096": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:4:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:4:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:4:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:4:3"
+        ],
+        "packet-0098": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:17:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:17:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:17:0:2"
+        ],
+        "packet-0099": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:17:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:17:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:17:1:2"
+        ],
+        "packet-0138": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:24:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:24:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:24:0:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:24:0:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:559"
+        ],
+        "packet-0148": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:26:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:26:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:26:0:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:26:0:3"
+        ],
+        "packet-0239": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:42:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:42:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:42:1:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:42:1:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:42:1:4",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:42:1:5",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:42:1:6",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:42:1:7",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:2:3"
+        ],
+        "packet-0271": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:288",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:287",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:289",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:3:2:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:321"
+        ],
+        "packet-0283": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:310",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:309",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:311"
+        ],
+        "packet-0287": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:317",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:316",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:318"
+        ],
+        "packet-0316": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:371",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:370",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:0:0"
+        ],
+        "packet-0319": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:377",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:376",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:378"
+        ],
+        "packet-0321": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:399",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:398",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:400"
+        ],
+        "packet-0355": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:495",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:494",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:496"
+        ],
+        "packet-0359": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:510",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:509",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:23:0:0"
+        ],
+        "packet-0360": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:517",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:516",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:518",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:162",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:504",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:584"
+        ],
+        "packet-0380": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:587",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:586",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:588",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:15:4:4",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:15:5:4",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:18:2:3"
+        ],
+        "packet-0388": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:604",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:603",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:25:0:0"
+        ],
+        "packet-0399": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:646",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:645",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:647"
+        ],
+        "packet-0468": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:320",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:321"
+        ]
+      },
+      "primary_span_count": 28,
+      "primary_span_ids": [
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:0:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:5:0:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:4:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:320",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:7:5:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:377",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:399",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:495",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:510",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:517",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:24:0:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:587",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:604",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:26:0:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:646",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:3:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:317",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:2:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:42:1:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:371",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:0:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:1:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:4:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:17:0:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:17:1:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:1:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:288",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:310"
+      ],
+      "rejected_count": 0,
+      "response_character_count": 2270,
+      "review_topic": "completeness_reference+capacity_process",
+      "selection_diagnostics": {
+        "batch_count": 5,
+        "covered_chapter_count": 40,
+        "covered_chapters": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          41,
+          42
+        ],
+        "filtered_packet_count": 476,
+        "final_packet_count": 113,
+        "ordinary_packet_count": 42,
+        "raw_packet_count": 504,
+        "relation_packet_budget_ratio": 0.7,
+        "relation_packet_count": 71,
+        "relation_packet_ratio": 0.6283,
+        "relation_types": {
+          "CONCLUSION_BASIS": 7,
+          "DEMAND_CAPACITY": 1,
+          "SUMMARY_DETAIL": 1,
+          "TEXT_TABLE": 62
+        },
+        "removal_reasons": {
+          "budget_and_quota": 363,
+          "duplicate_text": 19,
+          "empty_or_title_only": 4,
+          "repeated_table_header": 5
+        },
+        "removed_packet_count": 391,
+        "topic_packet_counts": {
+          "capacity_process": 10,
+          "completeness_reference": 18,
+          "digital_power_fire": 8,
+          "equipment_redundancy": 26,
+          "option_conclusion": 7,
+          "pipeline_quantities": 12,
+          "safety_environment_health": 22,
+          "schedule_investment": 10
+        },
+        "total_characters": 69221
+      },
+      "source_span_count": 111,
+      "stop_reason": "end_turn",
+      "valid_count": 8,
+      "validation_reason_code": null
+    },
+    {
+      "attempt_number": 1,
+      "batch_id": "v111-02",
+      "candidate_count": 8,
+      "character_count": 14747,
+      "content_block_count": 2,
+      "duration_seconds": 38.734,
+      "http_status": 200,
+      "llm_error_summary": null,
+      "packet_ids": [
+        "packet-0264",
+        "packet-0274",
+        "packet-0034",
+        "packet-0288",
+        "packet-0039",
+        "packet-0309",
+        "packet-0354",
+        "packet-0480",
+        "packet-0134",
+        "packet-0483",
+        "packet-0367",
+        "packet-0485",
+        "packet-0379",
+        "packet-0143",
+        "packet-0389",
+        "packet-0393",
+        "packet-0394",
+        "packet-0158",
+        "packet-0166",
+        "packet-0195",
+        "packet-0447",
+        "packet-0243",
+        "packet-0007",
+        "packet-0263",
+        "packet-0266",
+        "packet-0038"
+      ],
+      "packet_source_span_ids": {
+        "packet-0007": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:1:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:1:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:9",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:11",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:20"
+        ],
+        "packet-0034": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:1:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:1:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:313"
+        ],
+        "packet-0038": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:5:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:5:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:5:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:5:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:312"
+        ],
+        "packet-0039": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:7:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:7:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:7:0:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:291",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:1:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:325",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:332"
+        ],
+        "packet-0134": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:23:2:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:23:2:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:23:2:2"
+        ],
+        "packet-0143": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:25:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:25:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:25:0:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:25:0:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:328",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:17:0:0"
+        ],
+        "packet-0158": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:28:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:28:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:28:0:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:28:0:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:328",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:17:0:0"
+        ],
+        "packet-0166": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:29:3:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:29:3:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:29:3:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:29:3:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:28:1:0"
+        ],
+        "packet-0195": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:35:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:35:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:35:1:2"
+        ],
+        "packet-0243": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:43:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:43:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:43:1:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:43:1:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:43:1:4",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:14:1:0"
+        ],
+        "packet-0263": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:269",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:268",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:270"
+        ],
+        "packet-0264": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:270",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:269",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:0:0"
+        ],
+        "packet-0266": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:276",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:275",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:277",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:9"
+        ],
+        "packet-0274": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:293",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:292",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:294",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:56",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:367",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:17:2:2"
+        ],
+        "packet-0288": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:319",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:318",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:320"
+        ],
+        "packet-0309": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:357",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:356",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:0:0"
+        ],
+        "packet-0354": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:488",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:487",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:489",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:525"
+        ],
+        "packet-0367": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:557",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:556",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:558"
+        ],
+        "packet-0379": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:585",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:584",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:586",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:279",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:281",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:292"
+        ],
+        "packet-0389": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:609",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:608",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:610"
+        ],
+        "packet-0393": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:624",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:623",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:26:0:0"
+        ],
+        "packet-0394": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:631",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:630",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:632",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:5:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:294",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:3:3"
+        ],
+        "packet-0447": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:756",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:755",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:757"
+        ],
+        "packet-0480": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:489",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:490",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:492",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:494",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:491",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:493",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:495"
+        ],
+        "packet-0483": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:523",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:524",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:526",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:528",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:530",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:532",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:525",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:527",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:529"
+        ],
+        "packet-0485": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:560",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:561",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:563",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:565",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:567",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:569",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:562",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:564",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:566"
+        ]
+      },
+      "primary_span_count": 26,
+      "primary_span_ids": [
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:270",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:293",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:1:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:319",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:7:0:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:357",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:488",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:489",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:23:2:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:523",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:557",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:560",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:585",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:25:0:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:609",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:624",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:631",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:28:0:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:29:3:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:35:1:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:756",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:43:1:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:1:0:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:269",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:276",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:5:1"
+      ],
+      "rejected_count": 0,
+      "response_character_count": 2801,
+      "review_topic": "equipment_redundancy",
+      "source_span_count": 120,
+      "stop_reason": "end_turn",
+      "valid_count": 8,
+      "validation_reason_code": null
+    },
+    {
+      "attempt_number": 1,
+      "batch_id": "v111-03",
+      "candidate_count": 8,
+      "character_count": 13589,
+      "content_block_count": 2,
+      "duration_seconds": 45.328,
+      "http_status": 200,
+      "llm_error_summary": null,
+      "packet_ids": [
+        "packet-0020",
+        "packet-0036",
+        "packet-0040",
+        "packet-0078",
+        "packet-0473",
+        "packet-0474",
+        "packet-0361",
+        "packet-0141",
+        "packet-0144",
+        "packet-0488",
+        "packet-0152",
+        "packet-0155",
+        "packet-0030",
+        "packet-0047",
+        "packet-0071",
+        "packet-0076",
+        "packet-0104",
+        "packet-0116",
+        "packet-0126",
+        "packet-0128"
+      ],
+      "packet_source_span_ids": {
+        "packet-0020": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:0:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:0:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:124",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:187",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:192",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:300"
+        ],
+        "packet-0030": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:5:3:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:5:3:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:5:3:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:5:3:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:324"
+        ],
+        "packet-0036": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:3:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:3:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:3:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:3:3"
+        ],
+        "packet-0040": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:7:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:7:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:7:1:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:354"
+        ],
+        "packet-0047": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:2:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:2:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:2:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:2:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:488",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:525",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:544"
+        ],
+        "packet-0071": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:12:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:12:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:12:1:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:288",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:3:2:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:5:3:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:7:3:2"
+        ],
+        "packet-0076": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:1:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:1:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:286",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:3:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:12:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:351"
+        ],
+        "packet-0078": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:3:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:3:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:3:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:3:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:354",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:355",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:359",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:14:1:0"
+        ],
+        "packet-0104": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:18:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:18:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:18:0:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:18:0:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:328",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:16:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:17:0:0"
+        ],
+        "packet-0116": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:1:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:1:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:5:3:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:7:3:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:12:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:408"
+        ],
+        "packet-0126": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:21:5:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:21:5:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:21:5:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:100",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:459",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:460",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:710"
+        ],
+        "packet-0128": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:22:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:22:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:22:1:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:22:1:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:673"
+        ],
+        "packet-0141": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:24:3:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:24:3:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:24:3:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:24:3:3"
+        ],
+        "packet-0144": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:25:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:25:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:25:1:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:25:1:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:720"
+        ],
+        "packet-0152": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:26:4:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:26:4:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:26:4:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:26:4:3"
+        ],
+        "packet-0155": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:27:2:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:27:2:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:27:2:2"
+        ],
+        "packet-0361": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:519",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:518",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:520"
+        ],
+        "packet-0473": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:386",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:387",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:389",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:391",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:393",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:388",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:390",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:392",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:394"
+        ],
+        "packet-0474": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:395",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:396",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:398",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:400",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:402",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:404",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:397",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:399",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:401"
+        ],
+        "packet-0488": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:605",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:606",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:608",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:610",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:612",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:607",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:609",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:611",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:613"
+        ]
+      },
+      "primary_span_count": 20,
+      "primary_span_ids": [
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:0:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:3:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:7:1:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:3:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:386",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:395",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:519",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:24:3:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:25:1:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:605",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:26:4:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:27:2:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:5:3:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:2:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:12:1:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:1:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:18:0:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:1:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:21:5:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:22:1:1"
+      ],
+      "rejected_count": 0,
+      "response_character_count": 2639,
+      "review_topic": "pipeline_quantities+digital_power_fire",
+      "source_span_count": 119,
+      "stop_reason": "end_turn",
+      "valid_count": 8,
+      "validation_reason_code": null
+    },
+    {
+      "attempt_number": 1,
+      "batch_id": "v111-04",
+      "candidate_count": 8,
+      "character_count": 13405,
+      "content_block_count": 2,
+      "duration_seconds": 68.718,
+      "http_status": 200,
+      "llm_error_summary": null,
+      "packet_ids": [
+        "packet-0046",
+        "packet-0300",
+        "packet-0317",
+        "packet-0329",
+        "packet-0118",
+        "packet-0351",
+        "packet-0136",
+        "packet-0363",
+        "packet-0365",
+        "packet-0168",
+        "packet-0169",
+        "packet-0175",
+        "packet-0425",
+        "packet-0187",
+        "packet-0432",
+        "packet-0199",
+        "packet-0332",
+        "packet-0119",
+        "packet-0353",
+        "packet-0484",
+        "packet-0408",
+        "packet-0417"
+      ],
+      "packet_source_span_ids": {
+        "packet-0046": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:1:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:1:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:508",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:27:1:1"
+        ],
+        "packet-0118": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:3:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:3:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:3:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:3:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:408",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:414",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:18:4:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:19:2:0"
+        ],
+        "packet-0119": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:4:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:4:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:4:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:4:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:408",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:416",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:18:5:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:19:3:0"
+        ],
+        "packet-0136": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:23:4:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:23:4:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:23:4:2"
+        ],
+        "packet-0168": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:29:5:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:29:5:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:29:5:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:29:5:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:666"
+        ],
+        "packet-0169": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:30:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:30:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:30:0:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:30:0:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:681"
+        ],
+        "packet-0175": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:31:0:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:31:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:31:0:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:31:0:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:233",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:5:4:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:6:0:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:328"
+        ],
+        "packet-0187": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:33:2:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:33:2:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:33:2:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:33:2:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:337",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:4:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:711"
+        ],
+        "packet-0199": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:35:5:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:35:5:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:35:5:2"
+        ],
+        "packet-0300": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:340",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:339",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:341",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:502"
+        ],
+        "packet-0317": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:373",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:372",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:374",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:26:1:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:680",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:32:3:0"
+        ],
+        "packet-0329": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:422",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:421",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:423"
+        ],
+        "packet-0332": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:427",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:18:6:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:429"
+        ],
+        "packet-0351": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:479",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:478",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:480",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:416",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:19:3:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:473"
+        ],
+        "packet-0353": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:481",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:480",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:22:0:0"
+        ],
+        "packet-0363": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:535",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:534",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:536",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:9:3:2"
+        ],
+        "packet-0365": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:549",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:548",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:550"
+        ],
+        "packet-0408": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:666",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:665",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:667",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:346",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:408"
+        ],
+        "packet-0417": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:684",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:683",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:685"
+        ],
+        "packet-0425": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:703",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:702",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:32:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:28",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:290",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:681"
+        ],
+        "packet-0432": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:721",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:720",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:34:0:0"
+        ],
+        "packet-0484": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:545",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:546",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:548",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:550",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:552",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:554",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:547",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:549",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:551"
+        ]
+      },
+      "primary_span_count": 22,
+      "primary_span_ids": [
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:1:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:340",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:373",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:422",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:3:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:479",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:23:4:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:535",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:549",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:29:5:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:30:0:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:31:0:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:703",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:33:2:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:721",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:35:5:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:427",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:20:4:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:481",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:545",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:666",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:684"
+      ],
+      "rejected_count": 0,
+      "response_character_count": 2843,
+      "review_topic": "safety_environment_health",
+      "source_span_count": 101,
+      "stop_reason": "end_turn",
+      "valid_count": 8,
+      "validation_reason_code": null
+    },
+    {
+      "attempt_number": 1,
+      "batch_id": "v111-05",
+      "candidate_count": 8,
+      "character_count": 12702,
+      "content_block_count": 2,
+      "duration_seconds": 64.562,
+      "http_status": 200,
+      "llm_error_summary": null,
+      "packet_ids": [
+        "packet-0258",
+        "packet-0261",
+        "packet-0013",
+        "packet-0022",
+        "packet-0061",
+        "packet-0079",
+        "packet-0123",
+        "packet-0130",
+        "packet-0362",
+        "packet-0404",
+        "packet-0050",
+        "packet-0058",
+        "packet-0395",
+        "packet-0059",
+        "packet-0396",
+        "packet-0060",
+        "packet-0397"
+      ],
+      "packet_source_span_ids": {
+        "packet-0013": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:2:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:2:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:2:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:110",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:111",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:112",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:113",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:0:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:0:1"
+        ],
+        "packet-0022": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:2:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:2:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:2:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:2:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:279",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:281",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:299",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:336"
+        ],
+        "packet-0050": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:5:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:5:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:5:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:5:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:346",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:355",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:5:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:359"
+        ],
+        "packet-0058": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:1:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:1:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:1:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:279",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:1:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:324"
+        ],
+        "packet-0059": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:2:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:2:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:2:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:2:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:279",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:324"
+        ],
+        "packet-0060": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:3:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:3:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:3:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:3:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:279",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:336"
+        ],
+        "packet-0061": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:4:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:4:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:4:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:4:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:279",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:281",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:299",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:2:0"
+        ],
+        "packet-0079": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:4:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:4:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:4:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:4:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:279",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:281",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:303",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:324"
+        ],
+        "packet-0123": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:21:2:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:21:2:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:21:2:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:401",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:452",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:463",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:693"
+        ],
+        "packet-0130": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:22:3:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:22:3:0",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:22:3:2",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:22:3:3",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:373",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:680",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:690",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:693"
+        ],
+        "packet-0258": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:261",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:260",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:262"
+        ],
+        "packet-0261": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:265",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:264",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:266",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:10",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:1:2:1",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:75"
+        ],
+        "packet-0362": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:522",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:521",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:523"
+        ],
+        "packet-0395": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:635",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:634",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:636"
+        ],
+        "packet-0396": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:636",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:635",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:637"
+        ],
+        "packet-0397": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:637",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:636",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:27:0:0"
+        ],
+        "packet-0404": [
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:657",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:656",
+          "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:658"
+        ]
+      },
+      "primary_span_count": 17,
+      "primary_span_ids": [
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:261",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:265",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:2:2:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:4:2:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:4:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:13:4:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:21:2:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:22:3:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:522",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:657",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:8:5:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:1:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:635",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:2:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:636",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:t:10:3:1",
+        "703c0cbd-ef71-4a42-9e81-843b29ef332b-0:p:637"
+      ],
+      "rejected_count": 0,
+      "response_character_count": 2881,
+      "review_topic": "schedule_investment+option_conclusion",
+      "source_span_count": 82,
+      "stop_reason": "end_turn",
+      "valid_count": 8,
+      "validation_reason_code": null
+    }
+  ],
+  "case_id": "<case-id>",
+  "evidence_selector_version": "structured-packets-v1.2",
+  "integrity": {
+    "batch_count": 5,
+    "candidate_ledger_entries": 119,
+    "candidate_ledger_truncated": false,
+    "distinct_rule_id_count": 18,
+    "finding_count": 25,
+    "packet_ledger_entries": 504,
+    "packet_ledger_truncated": false,
+    "rule_result_count": 29
+  },
+  "packet_lifecycle_ledger": {
+    "entries": [],
+    "entries_redacted_for_sample": true,
+    "ledger_entry_count": 504,
+    "ledger_schema_version": "v1",
+    "ledger_size_bytes": 531983,
+    "ledger_truncated": false,
+    "summary": {
+      "decision:DROPPED": 391,
+      "decision:SELECTED": 113,
+      "reason_code:BUDGET_OR_QUOTA": 363,
+      "reason_code:DUPLICATE_TEXT": 19,
+      "reason_code:EMPTY_OR_TITLE_ONLY": 4,
+      "reason_code:REPEATED_TABLE_HEADER": 5,
+      "reason_code:SELECTED_FOR_BATCH": 113,
+      "stage:BUDGET": 363,
+      "stage:DEDUPLICATION": 19,
+      "stage:FILTER": 9,
+      "stage:FINAL_SELECTION": 113,
+      "topic:capacity_process": 10,
+      "topic:completeness_reference": 60,
+      "topic:digital_power_fire": 98,
+      "topic:equipment_redundancy": 89,
+      "topic:option_conclusion": 22,
+      "topic:pipeline_quantities": 53,
+      "topic:safety_environment_health": 56,
+      "topic:schedule_investment": 116
+    }
+  },
+  "rule_metrics": {
+    "CROSS_SOURCE_PARAM-001": {
+      "baseline_new_findings": 0,
+      "enabled": true,
+      "executed_count": 1,
+      "fail_count": 0,
+      "fp": 0,
+      "matched_tp": 0,
+      "pass_count": 0,
+      "rule_id": "CROSS_SOURCE_PARAM-001",
+      "unknown_count": 1
+    },
+    "EQUIPMENT_REDUNDANCY-001": {
+      "baseline_new_findings": 0,
+      "enabled": true,
+      "executed_count": 1,
+      "fail_count": 0,
+      "fp": 0,
+      "matched_tp": 0,
+      "pass_count": 0,
+      "rule_id": "EQUIPMENT_REDUNDANCY-001",
+      "unknown_count": 1
+    },
+    "REFERENCE-001": {
+      "baseline_new_findings": 0,
+      "enabled": true,
+      "executed_count": 1,
+      "fail_count": 0,
+      "fp": 0,
+      "matched_tp": 0,
+      "pass_count": 0,
+      "rule_id": "REFERENCE-001",
+      "unknown_count": 1
+    },
+    "SCHEDULE-001": {
+      "baseline_new_findings": 0,
+      "enabled": true,
+      "executed_count": 1,
+      "fail_count": 0,
+      "fp": 0,
+      "matched_tp": 0,
+      "pass_count": 0,
+      "rule_id": "SCHEDULE-001",
+      "unknown_count": 1
+    },
+    "SUMMARY_DETAIL-001": {
+      "baseline_new_findings": 0,
+      "enabled": true,
+      "executed_count": 1,
+      "fail_count": 0,
+      "fp": 0,
+      "matched_tp": 0,
+      "pass_count": 0,
+      "rule_id": "SUMMARY_DETAIL-001",
+      "unknown_count": 1
+    },
+    "UNIT_MAGNITUDE-001": {
+      "baseline_new_findings": 0,
+      "enabled": true,
+      "executed_count": 1,
+      "fail_count": 0,
+      "fp": 0,
+      "matched_tp": 0,
+      "pass_count": 0,
+      "rule_id": "UNIT_MAGNITUDE-001",
+      "unknown_count": 1
+    }
+  },
+  "run_id": "<run-id>",
+  "selection_diagnostics": {
+    "batch_count": 5,
+    "covered_chapter_count": 40,
+    "covered_chapters": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      41,
+      42
+    ],
+    "filtered_packet_count": 476,
+    "final_packet_count": 113,
+    "ordinary_packet_count": 42,
+    "raw_packet_count": 504,
+    "relation_packet_budget_ratio": 0.7,
+    "relation_packet_count": 71,
+    "relation_packet_ratio": 0.6283,
+    "relation_types": {
+      "CONCLUSION_BASIS": 7,
+      "DEMAND_CAPACITY": 1,
+      "SUMMARY_DETAIL": 1,
+      "TEXT_TABLE": 62
+    },
+    "removal_reasons": {
+      "budget_and_quota": 363,
+      "duplicate_text": 19,
+      "empty_or_title_only": 4,
+      "repeated_table_header": 5
+    },
+    "removed_packet_count": 391,
+    "topic_packet_counts": {
+      "capacity_process": 10,
+      "completeness_reference": 18,
+      "digital_power_fire": 8,
+      "equipment_redundancy": 26,
+      "option_conclusion": 7,
+      "pipeline_quantities": 12,
+      "safety_environment_health": 22,
+      "schedule_investment": 10
+    },
+    "total_characters": 69221
+  }
+}

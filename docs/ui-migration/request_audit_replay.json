@@ -1,0 +1,143 @@
+{
+  "base_url": "http://127.0.0.1:8890",
+  "requests": [
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/api/cases/<case-id>/runs/<run-id>",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/api/cases/<case-id>/runs/<run-id>/diagnostics",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/api/cases/<case-id>/runs/<run-id>/findings",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/api/health",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/api/llm/config",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/api/ruleset",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/api/runs/<run-id>/progress?after_sequence=0",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/app.js",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/layout.js",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/review_display_queue.js",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/review_progress.js",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/review_state.js",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/styles.css",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8890/workbench_state.js",
+      "status_codes": [
+        200,
+        200
+      ],
+      "count": 2
+    }
+  ],
+  "business_write_count": 0,
+  "provider_request_count": 0,
+  "console_errors": []
+}

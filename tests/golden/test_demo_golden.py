@@ -1,4 +1,4 @@
-"""Adversarial regression tests for the external DEMO golden corpus."""
+"""Adversarial regression tests for the bundled DEMO golden corpus."""
 
 from __future__ import annotations
 
@@ -104,6 +104,19 @@ def test_demo_exact_parameter_facts(run_golden_case):
     assert ("评价/探井数", 6.0) in values
     assert ("高峰产量", 2_300_000.0) in values
     assert ("地面处理能力", 2_000_000.0) in values
+
+
+def test_demo_exact_duplicate_fact_keeps_table_and_prose_provenance(run_golden_case):
+    run = run_golden_case("G-001")
+    fact = next(item for item in run.facts if item.canonical_name == "高峰产量")
+    result = next(item for item in run.rule_results if item.rule_id == "CAPACITY-001")
+
+    assert fact.merged_fact_ids
+    assert fact.merged_span_ids == ["DEMO-001:p:9"]
+    assert fact.fact_id in result.involved_fact_ids
+    assert set(fact.merged_fact_ids).issubset(result.involved_fact_ids)
+    assert fact.source_span_id in result.evidence_span_ids
+    assert set(fact.merged_span_ids).issubset(result.evidence_span_ids)
 
 
 def test_g009_category_summary_comes_from_corpus_and_is_reproducible(

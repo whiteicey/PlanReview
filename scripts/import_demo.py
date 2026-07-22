@@ -1,4 +1,4 @@
-"""CLI wrapper: load DEMO_ONLY rules and reference an external DOCX.
+"""CLI wrapper: load DEMO_ONLY rules and reference a user-selected DOCX.
 
 The rule/terminology loading logic lives in :mod:`app.rules.ruleset` so the API
 can reuse it.  This script adds the DOCX validation and command-line surface, and
@@ -38,7 +38,7 @@ class DemoRootNotFound(DemoImportError, RulesetNotConfigured):
 
 @dataclass(frozen=True)
 class DemoImport:
-    """References and validated metadata for one externally supplied DOCX."""
+    """References and validated metadata for one user-selected DOCX."""
 
     demo_root: Path
     source_docx: Path
@@ -57,7 +57,7 @@ def resolve_demo_root() -> Path:
 
 
 def validate_docx(source: Path) -> Path:
-    """Validate an existing, externally supplied DOCX without copying it."""
+    """Validate an existing user-selected DOCX without copying it."""
     source = Path(source)
     if not source.exists():
         raise DemoImportError(f"DOCX 文件不存在: {source}")
@@ -91,8 +91,8 @@ def import_demo(source_docx: Path, *, storage_root: Path | None = None) -> DemoI
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="导入 DEMO_ONLY 规则并引用外部 DOCX")
-    parser.add_argument("docx", type=Path, help="外部示例 DOCX 路径（不会复制到 storage/）")
+    parser = argparse.ArgumentParser(description="导入 DEMO_ONLY 规则并引用选定 DOCX")
+    parser.add_argument("docx", type=Path, help="示例 DOCX 路径（不会复制到 storage/）")
     args = parser.parse_args(argv)
     try:
         result = import_demo(args.docx)

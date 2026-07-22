@@ -3,50 +3,136 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>开发方案审查助手</title>
+  <title>智能初审执行台 · PlanReview</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
-  <main>
-    <p class="eyebrow">LOCAL REVIEW WORKBENCH</p>
-    <h1>开发方案审查助手</h1>
-    <p class="lede">用可追溯的证据链完成文本型 DOCX 形式初审。</p>
-    <div class="notice">AI 初审结果，不是正式审查结论</div>
-    <div class="ruleset-bar">
-      <button type="button" id="reload-ruleset">加载 / 重新加载规则库</button>
-      <span id="ruleset-status" class="ruleset-status">正在检查规则库…</span>
+<body data-layout-mode="auto" data-layout-resolved="desktop">
+  <header class="workbench-topbar">
+    <div class="brand-mark" aria-hidden="true"><i></i><i></i></div>
+    <div class="brand-copy"><strong>AI 智能审查平台</strong><span>智能初审执行台</span></div>
+    <div class="topbar-tools">
+      <span id="service-status" class="service-status pending"><i></i>正在检查服务</span>
+      <label class="layout-control" for="layout-mode">布局
+        <select id="layout-mode" aria-label="页面布局">
+          <option value="auto">自动</option>
+          <option value="desktop">横版</option>
+          <option value="compact">紧凑版</option>
+        </select>
+      </label>
     </div>
-    <details class="llm-config">
-      <summary>AI 复核设置（可选）</summary>
-      <div class="llm-config-body">
-        <label>复核方式
-          <select id="llm-provider">
-            <option value="mock">内置 Mock（默认，不联网）</option>
-            <option value="anthropic">在线 LLM（Anthropic 格式）</option>
-          </select>
-        </label>
-        <label>Base URL
-          <input id="llm-base-url" type="text" placeholder="https://api.deepseek.com/anthropic">
-        </label>
-        <label>模型
-          <input id="llm-model" type="text" placeholder="deepseek-chat">
-        </label>
-        <label>API Key
-          <input id="llm-api-key" type="password" placeholder="仅在此填写，保存后不再显示">
-        </label>
-        <div class="llm-config-actions">
-          <button type="button" id="llm-save">保存配置</button>
-          <button type="button" id="llm-test">测试连接</button>
-          <span id="llm-config-status" class="llm-config-status"></span>
+  </header>
+
+  <div class="workbench-shell">
+    <nav class="workbench-nav" aria-label="工作台导航">
+      <a class="active" href="#review-component" title="工作台"><span>⌂</span><b>工作台</b></a>
+      <a href="#case-component" title="案件文档"><span>▣</span><b>案件文档</b></a>
+      <a href="#review-component" title="执行过程"><span>▥</span><b>执行过程</b></a>
+      <a href="#result-component" title="审查结果"><span>✓</span><b>审查结果</b></a>
+      <a href="#result-component" title="导出报告"><span>⇩</span><b>导出报告</b></a>
+      <a href="#settings-component" title="AI设置"><span>⚙</span><b>AI设置</b></a>
+    </nav>
+
+    <aside class="case-column">
+      <section class="intro-component">
+        <p class="eyebrow">LOCAL REVIEW WORKBENCH</p>
+        <h1>开发方案审查助手</h1>
+        <p class="lede">用可追溯的证据链完成文本型DOCX形式初审。</p>
+        <div class="notice">AI 初审结果，不是正式审查结论</div>
+      </section>
+
+      <section id="case-component" class="panel case-panel" aria-labelledby="case-title">
+        <div class="panel-heading"><div><p class="eyebrow">CASE &amp; DOCUMENT</p><h2 id="case-title">案件 / 文档信息</h2></div></div>
+        <dl class="case-meta">
+          <div><dt>案例编号</dt><dd id="case-id-display">尚未创建</dd></div>
+          <div><dt>当前文档</dt><dd id="file-name-display">尚未选择</dd></div>
+          <div><dt>文件大小</dt><dd id="file-size-display">—</dd></div>
+        </dl>
+        <form id="upload">
+          <label class="upload-dropzone" for="file">
+            <span class="upload-icon">⇧</span><strong>选择DOCX文件</strong>
+            <small>仅支持文本型DOCX，文件内容留在本机</small>
+            <input id="file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+          </label>
+          <button type="submit" class="primary-action">上传并开始审查</button>
+        </form>
+        <div class="ruleset-bar">
+          <button type="button" id="reload-ruleset" class="secondary-action">重新加载规则库</button>
+          <span id="ruleset-status" class="ruleset-status">正在检查规则库…</span>
         </div>
-      </div>
-    </details>
-    <form id="upload">
-      <label class="file-picker" for="file">选择 DOCX<input id="file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></label>
-      <button type="submit">上传并开始</button>
-    </form>
-    <section id="result" aria-live="polite"></section>
-  </main>
+        <div class="experience-bar" aria-label="专家经验库">
+          <button type="button" id="reload-expert-experiences" class="secondary-action">加载 / 重新加载专家经验库</button>
+          <label class="experience-toggle"><input id="load-expert-experiences" type="checkbox">本轮加载专家经验库</label>
+          <span id="expert-experience-status" class="ruleset-status">正在加载专家经验库…</span>
+        </div>
+      </section>
+
+      <details id="settings-component" class="panel llm-config">
+        <summary>AI复核设置（可选）</summary>
+        <div class="llm-config-body">
+          <label>复核方式<select id="llm-provider"><option value="mock">内置Mock（默认，不联网）</option><option value="anthropic">在线LLM（Anthropic格式）</option></select></label>
+          <label>Base URL<input id="llm-base-url" type="text" placeholder="https://api.deepseek.com/anthropic"></label>
+          <label>模型<input id="llm-model" type="text" placeholder="deepseek-chat"></label>
+          <label>API Key<input id="llm-api-key" type="password" placeholder="仅在此填写，保存后不再显示"></label>
+          <label class="checkbox-label"><input id="llm-allow-private" type="checkbox">允许私网/本机LLM端点</label>
+          <div class="llm-config-actions"><button type="button" id="llm-save">保存配置</button><button type="button" id="llm-test">测试连接</button><button type="button" id="llm-structured-test">测试结构化输出</button></div>
+          <span id="llm-config-status" class="llm-config-status"></span>
+          <span id="llm-structured-status" class="llm-config-status" aria-live="polite"></span>
+        </div>
+      </details>
+    </aside>
+
+    <main class="review-column">
+      <section id="review-component" class="workflow-component">
+        <div class="workflow-tabs" role="tablist" aria-label="审查工作区">
+          <button type="button" role="tab" data-workflow-tab="progress" aria-selected="true">执行过程</button>
+          <button type="button" role="tab" data-workflow-tab="results" aria-selected="false">审查结果 <span id="result-count-badge">0</span></button>
+        </div>
+        <div id="review-progress-root" data-workflow-panel="progress"></div>
+      </section>
+
+      <section id="result-component" class="result-component" data-workflow-panel="results" hidden>
+        <div class="result-toolbar"><div><p class="eyebrow">REVIEW FINDINGS</p><h2>审查结果</h2></div><span id="result-summary-label">尚无结果</span></div>
+        <section id="result" aria-live="polite"></section>
+      </section>
+    </main>
+
+    <aside class="summary-column" aria-label="运行与结果摘要">
+      <section class="panel status-card">
+        <div class="panel-heading"><h2>运行状态</h2><span id="summary-status-pill" class="status-pill idle">未开始</span></div>
+        <dl class="summary-list">
+          <div><dt>Run ID</dt><dd id="summary-run-id">—</dd></div>
+          <div><dt>当前阶段</dt><dd id="summary-stage">等待启动</dd></div>
+          <div><dt>执行进度</dt><dd id="summary-progress">0%</dd></div>
+          <div><dt>已用时</dt><dd id="summary-elapsed">00:00</dd></div>
+          <div><dt>LLM状态</dt><dd id="summary-llm">尚未运行</dd></div>
+        </dl>
+      </section>
+      <section class="panel diagnostics-card">
+        <div class="panel-heading"><h2>V1.2运行诊断</h2><span id="selector-version" class="micro-label" hidden></span></div>
+        <dl class="summary-list">
+          <div><dt>规则结果</dt><dd id="diag-rule-results">—</dd></div>
+          <div><dt>规则数量</dt><dd id="diag-rule-ids">—</dd></div>
+          <div><dt>AI有效候选</dt><dd id="diag-ai-candidates">—</dd></div>
+          <div><dt>AI批次</dt><dd id="diag-batches">—</dd></div>
+          <div><dt>阶段记录</dt><dd id="diag-stages">—</dd></div>
+          <div><dt>证据包账本</dt><dd id="diag-packet-ledger">—</dd></div>
+          <div><dt>AI候选账本</dt><dd id="diag-candidate-ledger">—</dd></div>
+        </dl>
+      </section>
+      <section class="panel severity-card">
+        <div class="panel-heading"><h2>最终问题统计</h2></div>
+        <div class="severity-content"><div id="severity-donut" class="severity-donut"><strong id="severity-total">0</strong><span>总问题</span></div><ul class="severity-legend"><li><i class="high"></i>高风险<b id="severity-high">0</b></li><li><i class="medium"></i>中风险<b id="severity-medium">0</b></li><li><i class="low"></i>一般提示<b id="severity-low">0</b></li></ul></div>
+        <dl class="origin-summary"><div><dt>规则</dt><dd id="origin-rule">0</dd></div><div><dt>混合</dt><dd id="origin-hybrid">0</dd></div><div><dt>AI</dt><dd id="origin-llm">0</dd></div></dl>
+      </section>
+      <section class="panel preview-card"><div class="panel-heading"><h2>问题预览</h2><button type="button" id="view-all-findings" class="text-action">查看全部</button></div><div id="finding-preview" class="finding-preview"><p class="empty-preview">审查完成后显示最终问题。</p></div></section>
+    </aside>
+  </div>
+
+  <script src="/layout.js"></script>
+  <script src="/review_state.js"></script>
+  <script src="/workbench_state.js"></script>
+  <script src="/review_display_queue.js"></script>
+  <script src="/review_progress.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

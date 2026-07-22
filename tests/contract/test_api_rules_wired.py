@@ -113,7 +113,7 @@ def test_ruleset_status_and_reload_endpoints(monkeypatch, tmp_path):
     body = reload_response.json()
     assert body["loaded"] is True
     assert body["rule_count"] == len(loaded.rules)
-    assert body["root"]
+    assert "root" not in body
 
     status = client.get("/api/ruleset").json()
     assert status["loaded"] is True
@@ -137,4 +137,12 @@ def test_ruleset_reload_reports_unconfigured_without_500(monkeypatch, tmp_path):
     body = reload_response.json()
     assert body["loaded"] is False
     assert body["rule_count"] == 0
-    assert body["root"] is None
+    assert "root" not in body
+
+
+def test_ruleset_reload_rejects_client_supplied_root(monkeypatch, tmp_path):
+    client = _client(monkeypatch, tmp_path)
+
+    response = client.post("/api/ruleset/reload", json={"root": "C:/attacker/rules"})
+
+    assert response.status_code == 422

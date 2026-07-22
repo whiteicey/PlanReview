@@ -44,8 +44,10 @@ def test_pipeline_retains_facts_and_reaches_human_review_only_after_success() ->
     assert len(run.facts) == 1
     assert run.facts[0].source_span_id == "s1"
     assert run.rule_results[0].rule_id == "R1"
-    assert len(run.findings) == 2
-    assert all(finding.evidence_span_ids == ["s1"] for finding in run.findings)
+    assert len(run.findings) == 1
+    # This is a missing-section result: it deliberately has no fabricated
+    # document-wide evidence fallback.
+    assert all(finding.evidence_span_ids == [] for finding in run.findings)
     assert [record.stage for record in run.stage_records] == [
         PipelineStage.UPLOADED,
         PipelineStage.PARSED,
@@ -60,6 +62,9 @@ def test_pipeline_retains_facts_and_reaches_human_review_only_after_success() ->
 
 
 class _FailingProvider:
+    provider_name = "anthropic"
+    model_name = "safe-model"
+
     def review(self, request):  # noqa: ANN001, ANN201 - test double
         from app.llm.provider import LLMProviderError
 
@@ -75,7 +80,12 @@ def test_pipeline_tolerates_online_llm_failure_and_keeps_rule_findings() -> None
     assert run.rule_results[0].rule_id == "R1"
     assert any(finding.rule_id == "R1" for finding in run.findings)
     assert all(finding.origin.value != "llm" for finding in run.findings)
+    assert run.llm_review_error == "AI 服务调用失败，本次仅保留确定性规则结果"
+    assert run.llm_status.value == "PROVIDER_ERROR"
+    assert run.llm_provider == "anthropic"
+    assert run.llm_model == "safe-model"
+    assert run.llm_finding_count == 0
+    assert run.llm_error_summary == "AI 服务调用失败，本次仅保留确定性规则结果"
     stages = [record.stage for record in run.stage_records]
     assert PipelineStage.RECONCILED in stages
     assert PipelineStage.READY_FOR_HUMAN_REVIEW in stages
-

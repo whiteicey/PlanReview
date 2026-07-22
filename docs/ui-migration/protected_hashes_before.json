@@ -1,0 +1,30 @@
+﻿[
+    {
+        "path":  "web\\review_state.js",
+        "sha256":  "3947f8ba25c46b8caf191d48a57321455e6f6714b888e5b6416c0f1e4b4cd519"
+    },
+    {
+        "path":  "web\\review_display_queue.js",
+        "sha256":  "b4344aef631b16935d128882d7a5b2ca9d5652a6be971cad7f648794342ff592"
+    },
+    {
+        "path":  "app\\review\\pipeline.py",
+        "sha256":  "a29ea9ef234c63c24b9b8f436f7ff7c0eff87972e0fdd65e92399f5b0b6e7ea3"
+    },
+    {
+        "path":  "app\\persistence\\repository.py",
+        "sha256":  "8062766749aa31ffc7fefb3d2a0a4062c30c533f23a95f4efeaa79bcead46ec5"
+    },
+    {
+        "path":  "app\\review\\evidence_packets.py",
+        "sha256":  "0af9c3466f0045c0aa6f8c6dca1433faf2b949ad5279ca0f0a976436be3d13e1"
+    },
+    {
+        "path":  "app\\rules\\semantic.py",
+        "sha256":  "bc401398bdd9413160bf6bbc79b360aa6bb5a71159dc998061e022fd0068851e"
+    },
+    {
+        "path":  "app\\llm\\adapters\\anthropic.py",
+        "sha256":  "a1522b169f2b2d4d4a1d0cce7163a45a1236d6b5f546b7e8f2823eaa4f35551a"
+    }
+]

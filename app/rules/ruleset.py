@@ -24,6 +24,7 @@ from app.domain.exceptions import RuleLoadError
 from app.domain.schemas import RuleDefinition
 from app.extraction.terminology import TerminologyMap
 from app.rules.loader import load_rules, load_terminology
+from app.rules.feature_flags import is_rule_enabled
 
 # app/rules/ruleset.py -> parents[0]=app/rules, parents[1]=app, parents[2]=repo root
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -162,10 +163,11 @@ def load_production_rules(
             # list is dropped rather than silently widening the comparison.
             params.pop("match_dimensions")
         if normalized.get("operator") == "alias_normalization" and terminology is not None:
-            canonical, aliases = next(iter(terminology.canonical_to_aliases.items()), (None, ()))
-            if canonical:
-                params["canonical_name"] = canonical
-                params["aliases"] = [alias for alias in aliases if alias != canonical]
+            params["parameters"] = list(terminology.canonical_to_aliases)
+            params["aliases_by_parameter"] = {
+                canonical: [alias for alias in aliases if alias != canonical]
+                for canonical, aliases in terminology.canonical_to_aliases.items()
+            }
         if normalized.get("operator") == "issue_response_status_exists":
             # The status-existence operator reads the reply table structurally,
             # like the reply-completeness rule; supply the same header contract.
@@ -219,8 +221,8 @@ def load_production_terminology(path: Path) -> TerminologyMap:
 def load_repo_rules(terminology: TerminologyMap) -> list[RuleDefinition]:
     """Load repo-owned generic rules and inject terminology-derived params.
 
-    These rules are authored by this project (not the external authoritative
-    bundle) to express generic checks the 10-rule DEMO set does not cover. The
+    These rules are authored by this project, in addition to the bundled
+    10-rule DEMO set, to express generic checks that set does not cover. The
     ``prose_alias_unnormalized`` rule receives its alias vocabulary from the
     loaded terminology map — the same explicit config-injection pattern used for
     ``alias_normalization`` — so no alias names are hardcoded in this module.
@@ -242,7 +244,10 @@ def load_repo_rules(terminology: TerminologyMap) -> list[RuleDefinition]:
             injected.append(rule.model_copy(update={"params": {**rule.params, "terms": terms}}))
         else:
             injected.append(rule)
-    return injected
+    return [
+        rule.model_copy(update={"enabled": is_rule_enabled(rule.rule_id, rule.enabled)})
+        for rule in injected
+    ]
 
 
 def load_active_ruleset(root: Path | None = None) -> LoadedRuleset:

@@ -49,3 +49,6 @@
 - [ ] 未把 SKIPPED 报告为 PASS
 - [ ] 未把 UNKNOWN/BLOCK/缺证据/解析失败静默转为 PASS
 - [ ] 所有导出与页面保留「AI 初审结果，不是正式审查结论」
+## 收口验收填写要求
+
+报告必须单独记录 LLM 状态（`NOT_RUN`、`COMPLETED`、`COMPLETED_PARTIAL`、`CONFIGURATION_ERROR`、`PROVIDER_ERROR`、`INPUT_LIMIT_EXCEEDED`、`VALIDATION_FAILED`）、规则 Finding 是否保留、symlink 测试是否因 Windows 权限跳过，以及是否执行了 golden。不得把 AI 初审写成正式结论，也不得把 PDF/OCR/RAG/知识图谱或公网部署写成已支持能力。

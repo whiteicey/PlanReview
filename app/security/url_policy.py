@@ -117,7 +117,7 @@ def validate_base_url(url: str, allowlist: set[str] | None = None) -> str:
     return url
 
 
-def validate_llm_base_url(url: str) -> str:
+def validate_llm_base_url(url: str, *, allow_private_endpoint: bool = False) -> str:
     """Validate a user-configured LLM base URL with relaxed, desensitized-data rules.
 
     The review data is desensitized before upload, and the LLM endpoint is an
@@ -143,4 +143,8 @@ def validate_llm_base_url(url: str) -> str:
         or parsed.hostname is None
     ):
         _reject()
+    if not isinstance(allow_private_endpoint, bool):
+        _reject()
+    if not allow_private_endpoint:
+        validate_base_url(url)
     return url

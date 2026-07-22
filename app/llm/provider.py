@@ -1,8 +1,9 @@
 """Provider-neutral LLM contracts with safe logging and output validation.
 
-The concrete online provider adapters are intentionally deferred.  This module
-contains no provider SDK imports, network client, filesystem access, or code
-that interprets model/document content as executable instructions.
+The Anthropic-compatible online adapter is implemented separately under
+``app.llm.adapters``. This contract module contains no provider SDK imports,
+network client, filesystem access, or code that interprets model/document
+content as executable instructions. Mock remains the default provider.
 """
 
 from __future__ import annotations
@@ -13,11 +14,110 @@ import math
 import re
 from typing import Any, Protocol
 
+from app.domain.enums import FindingCategory
+from app.llm.limits import MAX_LLM_EVIDENCE_IDS, MAX_LLM_FINDINGS
+from app.security.finding_text import validate_finding_text
+
 _REDACTED = "[REDACTED]"
 
 
 class LLMProviderError(RuntimeError):
-    """An online provider call failed without exposing key or request body."""
+    """An online provider transport failed without exposing request content."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        http_status: int | None = None,
+        reason_code: str = "provider_error",
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.http_status = http_status if isinstance(http_status, int) and 100 <= http_status <= 599 else None
+        self.reason_code = (
+            reason_code
+            if reason_code in {"timeout", "transport_error", "http_error", "provider_error"}
+            else "provider_error"
+        )
+        self.retryable = retryable is True
+
+
+class LLMConfigurationError(RuntimeError):
+    """The selected provider cannot run because safe configuration is incomplete."""
+
+
+VALIDATION_REASON_MESSAGES = {
+    "no_text": "模型响应未包含可校验文本",
+    "envelope_missing_content": "模型响应缺少内容字段",
+    "unclosed_think": "模型推理块输出不完整",
+    "no_complete_array": "未找到完整JSON数组",
+    "multiple_arrays": "模型返回了多个JSON数组",
+    "explanation_too_long": "JSON前后说明文字超过限制",
+    "invalid_json": "JSON数组内容格式无效",
+    "root_not_array": "模型输出根结构不是JSON数组",
+    "truncated_json": "JSON数组输出不完整",
+    "too_many_findings": "候选问题超过8条",
+    "missing_field": "候选问题缺少必填字段或字段格式无效",
+    "invalid_category": "候选问题category不在允许范围",
+    "invalid_severity": "候选问题severity不在允许范围",
+    "invalid_evidence": "证据引用缺失或不在本次送审范围",
+}
+VALIDATION_REASON_CODES = frozenset(VALIDATION_REASON_MESSAGES)
+VALIDATION_CATEGORIES = frozenset({"output_format", "evidence_reference"})
+SAFE_STOP_REASONS = frozenset(
+    {"end_turn", "max_tokens", "stop_sequence", "tool_use", "pause_turn", "refusal", "unknown"}
+)
+
+
+def _optional_count(value: int | None, name: str) -> int | None:
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"invalid {name}")
+    return value
+
+
+def safe_stop_reason(value: Any) -> str | None:
+    if value is None:
+        return None
+    return value if isinstance(value, str) and value in SAFE_STOP_REASONS else "unknown"
+
+
+class LLMValidationError(ValueError):
+    """A provider returned content that failed safe structural validation."""
+
+    def __init__(
+        self,
+        reason_code: str,
+        *,
+        validation_category: str = "output_format",
+        candidate_count: int | None = None,
+        valid_count: int | None = None,
+        rejected_count: int | None = None,
+        http_status: int | None = None,
+        response_character_count: int | None = None,
+        stop_reason: str | None = None,
+        content_block_count: int | None = None,
+    ) -> None:
+        if validation_category not in VALIDATION_CATEGORIES:
+            raise ValueError("invalid LLM validation category")
+        if reason_code not in VALIDATION_REASON_CODES:
+            raise ValueError("invalid LLM validation reason code")
+        super().__init__(VALIDATION_REASON_MESSAGES[reason_code])
+        self.validation_category = validation_category
+        self.reason_code = reason_code
+        self.candidate_count = _optional_count(candidate_count, "candidate_count")
+        self.valid_count = _optional_count(valid_count, "valid_count")
+        self.rejected_count = _optional_count(rejected_count, "rejected_count")
+        self.http_status = http_status if isinstance(http_status, int) and 100 <= http_status <= 599 else None
+        self.response_character_count = _optional_count(response_character_count, "response_character_count")
+        self.stop_reason = safe_stop_reason(stop_reason)
+        self.content_block_count = _optional_count(content_block_count, "content_block_count")
+
+    @property
+    def category(self) -> str:
+        """Compatibility alias for callers introduced before reason codes."""
+        return self.validation_category
 
 
 _SAFE_FLOAT_OPTION_KEYS = frozenset(
@@ -83,12 +183,28 @@ class LLMResponse:
     model: str
     findings: list[dict[str, Any]]
     request_id: str | None = None
+    http_status: int | None = None
+    response_character_count: int | None = None
+    stop_reason: str | None = None
+    content_block_count: int | None = None
+
+
+@dataclass(frozen=True)
+class LLMConnectionResult:
+    provider: str
+    model: str
+    http_status: int
 
 
 class LLMProvider(Protocol):
     """Minimal provider abstraction; implementations must return validated data."""
 
+    provider_name: str
+    model_name: str
+
     def review(self, request: LLMRequest) -> LLMResponse: ...
+
+    def test_connection(self) -> LLMConnectionResult: ...
 
 
 def validate_findings(
@@ -101,26 +217,93 @@ def validate_findings(
     so callers cannot mutate the provider's internal result through aliases.
     """
     allowed_ids = set(allowed_evidence_span_ids)
+    try:
+        finding_items = list(findings)
+    except TypeError:
+        raise LLMValidationError("missing_field") from None
+    if len(finding_items) > MAX_LLM_FINDINGS:
+        raise LLMValidationError(
+            "too_many_findings",
+            candidate_count=len(finding_items),
+            valid_count=0,
+            rejected_count=len(finding_items),
+        )
     validated: list[dict[str, Any]] = []
-    for finding in findings:
+    for finding in finding_items:
+        if not isinstance(finding, Mapping):
+            raise LLMValidationError(
+                "missing_field", candidate_count=len(finding_items),
+                valid_count=0, rejected_count=len(finding_items),
+            )
         missing = _REQUIRED_FINDING_FIELDS.difference(finding)
         if missing:
-            names = ", ".join(sorted(missing))
-            raise ValueError(f"finding missing required field(s): {names}")
+            evidence_error = "evidence_span_ids" in missing
+            raise LLMValidationError(
+                "invalid_evidence" if evidence_error else "missing_field",
+                validation_category="evidence_reference" if evidence_error else "output_format",
+                candidate_count=len(finding_items),
+                valid_count=0,
+                rejected_count=len(finding_items),
+            )
         if not all(isinstance(finding[name], str) for name in _REQUIRED_FINDING_FIELDS - {"evidence_span_ids"}):
-            raise ValueError("finding text fields must be strings")
+            raise LLMValidationError(
+                "missing_field", candidate_count=len(finding_items),
+                valid_count=0, rejected_count=len(finding_items),
+            )
+        for field_name in ("title", "description", "suggestion"):
+            try:
+                validate_finding_text(finding[field_name], field_name)
+            except (TypeError, ValueError) as exc:
+                raise LLMValidationError(
+                    "missing_field", candidate_count=len(finding_items),
+                    valid_count=0, rejected_count=len(finding_items),
+                ) from None
         if finding["severity"] not in _ALLOWED_SEVERITIES:
-            raise ValueError(f"invalid severity: {finding['severity']!r}")
+            raise LLMValidationError(
+                "invalid_severity", candidate_count=len(finding_items),
+                valid_count=0, rejected_count=len(finding_items),
+            )
+        try:
+            category = FindingCategory(finding["category"])
+        except (TypeError, ValueError) as exc:
+            raise LLMValidationError(
+                "invalid_category", candidate_count=len(finding_items),
+                valid_count=0, rejected_count=len(finding_items),
+            ) from None
 
         evidence_ids = finding["evidence_span_ids"]
         if not isinstance(evidence_ids, list) or not all(isinstance(value, str) for value in evidence_ids):
-            raise ValueError("evidence_span_ids must be a list of strings")
+            raise LLMValidationError(
+                "invalid_evidence",
+                validation_category="evidence_reference",
+                candidate_count=len(finding_items),
+                valid_count=0, rejected_count=len(finding_items),
+            )
+        if not evidence_ids:
+            raise LLMValidationError(
+                "invalid_evidence",
+                validation_category="evidence_reference",
+                candidate_count=len(finding_items),
+                valid_count=0, rejected_count=len(finding_items),
+            )
+        if len(evidence_ids) > MAX_LLM_EVIDENCE_IDS:
+            raise LLMValidationError(
+                "invalid_evidence",
+                validation_category="evidence_reference",
+                candidate_count=len(finding_items),
+                valid_count=0, rejected_count=len(finding_items),
+            )
         unknown_ids = set(evidence_ids).difference(allowed_ids)
         if unknown_ids:
-            names = ", ".join(sorted(unknown_ids))
-            raise ValueError(f"finding references unknown evidence span(s): {names}")
+            raise LLMValidationError(
+                "invalid_evidence",
+                validation_category="evidence_reference",
+                candidate_count=len(finding_items),
+                valid_count=0, rejected_count=len(finding_items),
+            )
 
         safe_finding = dict(finding)
+        safe_finding["category"] = category.value
         safe_finding["evidence_span_ids"] = list(evidence_ids)
         validated.append(safe_finding)
     return validated

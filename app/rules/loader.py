@@ -8,10 +8,10 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
-from app.domain.exceptions import RuleLoadError
+from app.domain.exceptions import RuleLoadError, UnknownOperatorError
 from app.domain.schemas import RuleDefinition
 from app.extraction.terminology import TerminologyMap
-from app.rules.operators import OPERATOR_NAMES
+from app.rules.operators import OPERATOR_NAMES, get_operator
 _RULE_FIELDS = frozenset(RuleDefinition.model_fields)
 
 
@@ -64,7 +64,10 @@ def _validate_rule_row(row: Any, index: int) -> RuleDefinition:
         raise RuleLoadError(f"rules[{index}] 不符合规则模式: {exc}") from exc
 
     if rule.operator not in OPERATOR_NAMES:
-        raise RuleLoadError(f"未知 operator: {rule.operator}")
+        try:
+            get_operator(rule.operator)
+        except UnknownOperatorError as exc:
+            raise RuleLoadError(f"未知 operator: {rule.operator}") from exc
     if rule.source_type != "DEMO_ONLY":
         raise RuleLoadError(f"不支持 source_type: {rule.source_type}")
     return rule

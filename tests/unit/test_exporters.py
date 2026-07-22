@@ -8,7 +8,7 @@ from openpyxl import load_workbook
 
 from app.domain.enums import Origin, ReviewStatus, RuleStatus, Severity
 from app.domain.schemas import Finding, RuleResult
-from app.reports.exporters import export_anonymous_package, export_excel, export_word
+from app.reports.exporters import export_anonymous_package, export_excel, export_word, safe_excel_cell
 from app.review.pipeline import ReviewRun
 
 
@@ -84,9 +84,56 @@ def test_anonymous_package_contains_only_honest_anonymized_export_data(tmp_path)
         "cost": "not_measured",
     }
     assert payload["findings"][0]["review_status"] == "reviewstatus-0002"
-    assert payload["findings"][0]["category"] == "category-0001"
+    assert payload["findings"][0]["category"] == "category-0005"
     assert payload["findings"][0]["severity"] == "severity-0001"
     assert "title" not in payload["findings"][0]
     assert "description" not in payload["findings"][0]
     assert "suggestion" not in payload["findings"][0]
     assert "human_note" not in payload["findings"][0]
+
+
+def test_excel_export_never_creates_formulas_from_external_text(tmp_path):
+    attacks = [
+        "=1+1",
+        '=HYPERLINK("https://example.com","click")',
+        "+CMD",
+        "-2+3",
+        "@SUM(A1:A2)",
+    ]
+    run = _run()
+    run.findings[0] = run.findings[0].model_copy(
+        update={
+            "title": attacks[0],
+            "description": attacks[1],
+            "suggestion": attacks[2],
+            "human_note": attacks[3],
+            "category": attacks[4],
+        }
+    )
+    run.rule_results[0] = run.rule_results[0].model_copy(
+        update={"message": attacks[0], "category": attacks[1], "evidence_span_ids": ["span-1"]}
+    )
+    run.evidence_locations = {"span-1": attacks[2]}
+    target = export_excel(
+        run,
+        tmp_path / "safe.xlsx",
+        evidence_texts={"span-1": attacks[3]},
+        evidence_file_names={"span-1": attacks[4]},
+    )
+
+    workbook = load_workbook(target, data_only=False)
+    assert all(
+        cell.data_type != "f"
+        for sheet in workbook.worksheets
+        for row in sheet.iter_rows()
+        for cell in row
+    )
+    assert all(safe_excel_cell(value).startswith("'") for value in attacks)
+
+
+def test_safe_excel_cell_preserves_typed_scalars_and_removes_illegal_controls():
+    from datetime import date
+
+    values = [1, 2.5, True, date(2026, 1, 2), None]
+    assert [safe_excel_cell(value) for value in values] == values
+    assert safe_excel_cell("safe\x00text") == "safetext"

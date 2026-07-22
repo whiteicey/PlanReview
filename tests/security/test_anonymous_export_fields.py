@@ -16,7 +16,7 @@ def test_anonymous_allowlist_maps_adversarial_taxonomy_values_to_opaque_values(t
             Finding(
                 finding_id="F1",
                 origin=Origin.RULE,
-                category="vendor-A/request-abc ordinary source sentence",
+                category="other",
                 severity=Severity.HIGH,
                 title="ordinary source paragraph",
                 description="ordinary source paragraph body",
@@ -32,7 +32,7 @@ def test_anonymous_allowlist_maps_adversarial_taxonomy_values_to_opaque_values(t
                 rule_version="model/request-abc",
                 status="FAIL",
                 severity=Severity.HIGH,
-                category="vendor-A",
+                category="other",
             )
         ],
         evidence_text_hashes={"span-1": "c" * 64},
@@ -42,7 +42,7 @@ def test_anonymous_allowlist_maps_adversarial_taxonomy_values_to_opaque_values(t
         text = archive.read("anonymous-findings.json").decode("utf-8")
         payload = json.loads(text)
 
-    assert payload["findings"][0]["category"] == "category-unknown"
+    assert payload["findings"][0]["category"] == "category-0011"
     assert payload["findings"][0]["severity"] == "severity-0001"
     assert payload["findings"][0]["review_status"] == "reviewstatus-0002"
     assert payload["rule_versions"] == [{"rule_id": "rule-0001", "version": "version-0001"}]

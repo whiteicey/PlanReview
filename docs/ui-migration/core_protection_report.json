@@ -1,0 +1,445 @@
+{
+  "protected_file_count": 73,
+  "changed": [],
+  "passed": true,
+  "files": [
+    {
+      "path": "app/__init__.py",
+      "ui_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "core_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "equal": true
+    },
+    {
+      "path": "app/api/__init__.py",
+      "ui_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "core_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "equal": true
+    },
+    {
+      "path": "app/api/routes.py",
+      "ui_sha256": "472d482e5249018698ada662a153bb6db8bc8f59785cddc0ce8900b5b1d3cd72",
+      "core_sha256": "472d482e5249018698ada662a153bb6db8bc8f59785cddc0ce8900b5b1d3cd72",
+      "equal": true
+    },
+    {
+      "path": "app/api/schemas.py",
+      "ui_sha256": "6089800293b6d3c44411e35064942f43f16aec9d1917901ba7e3a0e5ef0da20d",
+      "core_sha256": "6089800293b6d3c44411e35064942f43f16aec9d1917901ba7e3a0e5ef0da20d",
+      "equal": true
+    },
+    {
+      "path": "app/diff/__init__.py",
+      "ui_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "core_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "equal": true
+    },
+    {
+      "path": "app/diff/pairing.py",
+      "ui_sha256": "8e3c2512b7748ecca1de45776b5591efeea9af6bff46414b5b029a64add1a23a",
+      "core_sha256": "8e3c2512b7748ecca1de45776b5591efeea9af6bff46414b5b029a64add1a23a",
+      "equal": true
+    },
+    {
+      "path": "app/diff/parameter_diff.py",
+      "ui_sha256": "79e5663c4ab7e9e80adfc217074e8e3a1758a79b618d0ddf93eb79ab4b03643e",
+      "core_sha256": "79e5663c4ab7e9e80adfc217074e8e3a1758a79b618d0ddf93eb79ab4b03643e",
+      "equal": true
+    },
+    {
+      "path": "app/domain/__init__.py",
+      "ui_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "core_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "equal": true
+    },
+    {
+      "path": "app/domain/enums.py",
+      "ui_sha256": "5b0c069f62b2af1d530859b6f15a631ddb545a1725ea5ed6bb329362c7a2af9b",
+      "core_sha256": "5b0c069f62b2af1d530859b6f15a631ddb545a1725ea5ed6bb329362c7a2af9b",
+      "equal": true
+    },
+    {
+      "path": "app/domain/exceptions.py",
+      "ui_sha256": "1baa5a8ebb9ce212ca8a63487f2883181e2de41c899da21841ab4f2698040fa8",
+      "core_sha256": "1baa5a8ebb9ce212ca8a63487f2883181e2de41c899da21841ab4f2698040fa8",
+      "equal": true
+    },
+    {
+      "path": "app/domain/ids.py",
+      "ui_sha256": "631937724b1b5397cf4a2480a84e2b7e990436af1531acea90cbec9f17abca8a",
+      "core_sha256": "631937724b1b5397cf4a2480a84e2b7e990436af1531acea90cbec9f17abca8a",
+      "equal": true
+    },
+    {
+      "path": "app/domain/schemas.py",
+      "ui_sha256": "3f7661cb8c7fadb62d15e94f6d801a50b527e20d7098b2f09ce828f15687397c",
+      "core_sha256": "3f7661cb8c7fadb62d15e94f6d801a50b527e20d7098b2f09ce828f15687397c",
+      "equal": true
+    },
+    {
+      "path": "app/domain/units.py",
+      "ui_sha256": "a9862ab305f04bbb05a0c54304ae14713e8e160cb4aeebf0c008ae906c6ecc0e",
+      "core_sha256": "a9862ab305f04bbb05a0c54304ae14713e8e160cb4aeebf0c008ae906c6ecc0e",
+      "equal": true
+    },
+    {
+      "path": "app/extraction/__init__.py",
+      "ui_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "core_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "equal": true
+    },
+    {
+      "path": "app/extraction/normalization.py",
+      "ui_sha256": "cd064f63e688cb52fb499e8c60505d77ce2abf1e60da424cbb8f78c5bb1fce6a",
+      "core_sha256": "cd064f63e688cb52fb499e8c60505d77ce2abf1e60da424cbb8f78c5bb1fce6a",
+      "equal": true
+    },
+    {
+      "path": "app/extraction/parameters.py",
+      "ui_sha256": "82d02ab88aa3f2b42a445f7fcb5757eae9f1b0139243b65fd59b4ea0c5f2dc90",
+      "core_sha256": "82d02ab88aa3f2b42a445f7fcb5757eae9f1b0139243b65fd59b4ea0c5f2dc90",
+      "equal": true
+    },
+    {
+      "path": "app/extraction/sections.py",
+      "ui_sha256": "db9e37cf3ca213a6e99adda01a1be5e02f5c6023a39945a07629c47c6e0d47d9",
+      "core_sha256": "db9e37cf3ca213a6e99adda01a1be5e02f5c6023a39945a07629c47c6e0d47d9",
+      "equal": true
+    },
+    {
+      "path": "app/extraction/source_version.py",
+      "ui_sha256": "56a27ec9f59573563740e060b7c1b2cb77e5789253241da9b6fc1e2265401f75",
+      "core_sha256": "56a27ec9f59573563740e060b7c1b2cb77e5789253241da9b6fc1e2265401f75",
+      "equal": true
+    },
+    {
+      "path": "app/extraction/terminology.py",
+      "ui_sha256": "586a586cf15f15c94ba25be61d22f0e54215748fb6458fc713845eb6c86a1250",
+      "core_sha256": "586a586cf15f15c94ba25be61d22f0e54215748fb6458fc713845eb6c86a1250",
+      "equal": true
+    },
+    {
+      "path": "app/llm/__init__.py",
+      "ui_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "core_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "equal": true
+    },
+    {
+      "path": "app/llm/adapters/__init__.py",
+      "ui_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "core_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "equal": true
+    },
+    {
+      "path": "app/llm/adapters/anthropic.py",
+      "ui_sha256": "a1522b169f2b2d4d4a1d0cce7163a45a1236d6b5f546b7e8f2823eaa4f35551a",
+      "core_sha256": "a1522b169f2b2d4d4a1d0cce7163a45a1236d6b5f546b7e8f2823eaa4f35551a",
+      "equal": true
+    },
+    {
+      "path": "app/llm/config_store.py",
+      "ui_sha256": "260eeb4319b7181ae638db1a39b748a01080c8ff6d93b18138dca4452857f2b1",
+      "core_sha256": "260eeb4319b7181ae638db1a39b748a01080c8ff6d93b18138dca4452857f2b1",
+      "equal": true
+    },
+    {
+      "path": "app/llm/factory.py",
+      "ui_sha256": "69c0b359ffbaf826f0d34777d044af4b2d79a4b6a0177df27c8acaae775c8447",
+      "core_sha256": "69c0b359ffbaf826f0d34777d044af4b2d79a4b6a0177df27c8acaae775c8447",
+      "equal": true
+    },
+    {
+      "path": "app/llm/limits.py",
+      "ui_sha256": "67f0f40ecd7056623cd91d244a578247cb39c9c9686a2a5a69d0d72e8bd9e8ce",
+      "core_sha256": "67f0f40ecd7056623cd91d244a578247cb39c9c9686a2a5a69d0d72e8bd9e8ce",
+      "equal": true
+    },
+    {
+      "path": "app/llm/mock.py",
+      "ui_sha256": "7157f742c04811cd339f0753b51bd2b4c1626718279e7164b0c05ccfec56e7c9",
+      "core_sha256": "7157f742c04811cd339f0753b51bd2b4c1626718279e7164b0c05ccfec56e7c9",
+      "equal": true
+    },
+    {
+      "path": "app/llm/provider.py",
+      "ui_sha256": "d494f9419ac36268f28c67da073ab2c52a004430950cac7181a15ad983b48a70",
+      "core_sha256": "d494f9419ac36268f28c67da073ab2c52a004430950cac7181a15ad983b48a70",
+      "equal": true
+    },
+    {
+      "path": "app/main.py",
+      "ui_sha256": "89f21d7a4c0b33e7c72241e39821639cf7b3118ee17917e4f16236279cadb7d7",
+      "core_sha256": "89f21d7a4c0b33e7c72241e39821639cf7b3118ee17917e4f16236279cadb7d7",
+      "equal": true
+    },
+    {
+      "path": "app/parsers/__init__.py",
+      "ui_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "core_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "equal": true
+    },
+    {
+      "path": "app/parsers/docx_parser.py",
+      "ui_sha256": "1ec2ba452302eacc2a0691ea58d228773dcae0a859224c6ce045c0da298e7d7d",
+      "core_sha256": "1ec2ba452302eacc2a0691ea58d228773dcae0a859224c6ce045c0da298e7d7d",
+      "equal": true
+    },
+    {
+      "path": "app/persistence/__init__.py",
+      "ui_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "core_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "equal": true
+    },
+    {
+      "path": "app/persistence/db.py",
+      "ui_sha256": "aa3303b62eaa5c0ef37cefc1a4228ad5eddecce747956dfb0eb9522f339f3ceb",
+      "core_sha256": "aa3303b62eaa5c0ef37cefc1a4228ad5eddecce747956dfb0eb9522f339f3ceb",
+      "equal": true
+    },
+    {
+      "path": "app/persistence/models.py",
+      "ui_sha256": "a4f26014b8f6788b4d9feec641a0696fd7109220a25b69737b2b825bb5191a41",
+      "core_sha256": "a4f26014b8f6788b4d9feec641a0696fd7109220a25b69737b2b825bb5191a41",
+      "equal": true
+    },
+    {
+      "path": "app/persistence/repository.py",
+      "ui_sha256": "8062766749aa31ffc7fefb3d2a0a4062c30c533f23a95f4efeaa79bcead46ec5",
+      "core_sha256": "8062766749aa31ffc7fefb3d2a0a4062c30c533f23a95f4efeaa79bcead46ec5",
+      "equal": true
+    },
+    {
+      "path": "app/pipeline.py",
+      "ui_sha256": "a13297d764e49155596d9f7a11fd9d1a381e470dcc79afe4860849298db565eb",
+      "core_sha256": "a13297d764e49155596d9f7a11fd9d1a381e470dcc79afe4860849298db565eb",
+      "equal": true
+    },
+    {
+      "path": "app/reports/__init__.py",
+      "ui_sha256": "96ebb7cc6b84b8ba7d4825da12b000df56a02f811a30d45b6d1693143c98b03c",
+      "core_sha256": "96ebb7cc6b84b8ba7d4825da12b000df56a02f811a30d45b6d1693143c98b03c",
+      "equal": true
+    },
+    {
+      "path": "app/reports/exporters.py",
+      "ui_sha256": "9ae32b503c1052e2377c4ce8b2d601a003d1905df63bbf0ea0a14a922c1077a1",
+      "core_sha256": "9ae32b503c1052e2377c4ce8b2d601a003d1905df63bbf0ea0a14a922c1077a1",
+      "equal": true
+    },
+    {
+      "path": "app/review/__init__.py",
+      "ui_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "core_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "equal": true
+    },
+    {
+      "path": "app/review/background_jobs.py",
+      "ui_sha256": "e5d65a8fb231eee7a677c505a413403b584fd97068d52822f1f79c3727918926",
+      "core_sha256": "e5d65a8fb231eee7a677c505a413403b584fd97068d52822f1f79c3727918926",
+      "equal": true
+    },
+    {
+      "path": "app/review/evidence_packets.py",
+      "ui_sha256": "0af9c3466f0045c0aa6f8c6dca1433faf2b949ad5279ca0f0a976436be3d13e1",
+      "core_sha256": "0af9c3466f0045c0aa6f8c6dca1433faf2b949ad5279ca0f0a976436be3d13e1",
+      "equal": true
+    },
+    {
+      "path": "app/review/finding_guards.py",
+      "ui_sha256": "39c71ad11e283d649ab39885128e07ad6bc1b0bdf681c0671164bb4a5d4cc0ef",
+      "core_sha256": "39c71ad11e283d649ab39885128e07ad6bc1b0bdf681c0671164bb4a5d4cc0ef",
+      "equal": true
+    },
+    {
+      "path": "app/review/ledgers.py",
+      "ui_sha256": "0975cf186550051e9527b7338dcb341c63d1415a8f8e105d7d909c12886f62e0",
+      "core_sha256": "0975cf186550051e9527b7338dcb341c63d1415a8f8e105d7d909c12886f62e0",
+      "equal": true
+    },
+    {
+      "path": "app/review/parsed_cache.py",
+      "ui_sha256": "be97dc5786e3f595575c18d7ceace1cdf6eb61eaa8cac60c9547e838577ecbae",
+      "core_sha256": "be97dc5786e3f595575c18d7ceace1cdf6eb61eaa8cac60c9547e838577ecbae",
+      "equal": true
+    },
+    {
+      "path": "app/review/pipeline.py",
+      "ui_sha256": "a29ea9ef234c63c24b9b8f436f7ff7c0eff87972e0fdd65e92399f5b0b6e7ea3",
+      "core_sha256": "a29ea9ef234c63c24b9b8f436f7ff7c0eff87972e0fdd65e92399f5b0b6e7ea3",
+      "equal": true
+    },
+    {
+      "path": "app/review/progress.py",
+      "ui_sha256": "42db99f64332b9957dfb419555eded9ea7cf2ce0d44ea698d70ddfaf6f88f785",
+      "core_sha256": "42db99f64332b9957dfb419555eded9ea7cf2ce0d44ea698d70ddfaf6f88f785",
+      "equal": true
+    },
+    {
+      "path": "app/review/reconcile.py",
+      "ui_sha256": "adf2c64fe37144eb018c1d721dde5ac916f4454a98239c0fb820c4f6df366ad9",
+      "core_sha256": "adf2c64fe37144eb018c1d721dde5ac916f4454a98239c0fb820c4f6df366ad9",
+      "equal": true
+    },
+    {
+      "path": "app/rules/__init__.py",
+      "ui_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "core_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "equal": true
+    },
+    {
+      "path": "app/rules/engine.py",
+      "ui_sha256": "fe97c95d88ae4cfb235a021309113b304ccca7d59818f8195cf82aced9f52797",
+      "core_sha256": "fe97c95d88ae4cfb235a021309113b304ccca7d59818f8195cf82aced9f52797",
+      "equal": true
+    },
+    {
+      "path": "app/rules/evidence.py",
+      "ui_sha256": "3e471b19a356b27954c6d463374d50d73e248bc22814a0c39e315dc69089c89f",
+      "core_sha256": "3e471b19a356b27954c6d463374d50d73e248bc22814a0c39e315dc69089c89f",
+      "equal": true
+    },
+    {
+      "path": "app/rules/feature_flags.py",
+      "ui_sha256": "a4842d2cd3516c8da0f092532a881db1d6dd3eac756d3b78b25525bd6abf4e6a",
+      "core_sha256": "a4842d2cd3516c8da0f092532a881db1d6dd3eac756d3b78b25525bd6abf4e6a",
+      "equal": true
+    },
+    {
+      "path": "app/rules/loader.py",
+      "ui_sha256": "b43205ee0a23c4263831817f9ebc3888f0b2ed867f72e7a3221d00a8dd59672d",
+      "core_sha256": "b43205ee0a23c4263831817f9ebc3888f0b2ed867f72e7a3221d00a8dd59672d",
+      "equal": true
+    },
+    {
+      "path": "app/rules/operators.py",
+      "ui_sha256": "44b721fd09ed43b9bd6940332956603d22e7473f7bf8dca8bbe7c588ebc5076e",
+      "core_sha256": "44b721fd09ed43b9bd6940332956603d22e7473f7bf8dca8bbe7c588ebc5076e",
+      "equal": true
+    },
+    {
+      "path": "app/rules/registry.py",
+      "ui_sha256": "f69da29757e81bba88f697aef288736655d18e1007e4a9c947e2d07dc6754bc5",
+      "core_sha256": "f69da29757e81bba88f697aef288736655d18e1007e4a9c947e2d07dc6754bc5",
+      "equal": true
+    },
+    {
+      "path": "app/rules/repo_rules.yaml",
+      "ui_sha256": "e6947f1928519b4e71da94cbc933c7e212f774c7e4e50cb071407b8d7864666b",
+      "core_sha256": "e6947f1928519b4e71da94cbc933c7e212f774c7e4e50cb071407b8d7864666b",
+      "equal": true
+    },
+    {
+      "path": "app/rules/ruleset.py",
+      "ui_sha256": "1580a80a41e2261bdc85f735b4a5c8e89f866cf246200207a999fe3638ab7025",
+      "core_sha256": "1580a80a41e2261bdc85f735b4a5c8e89f866cf246200207a999fe3638ab7025",
+      "equal": true
+    },
+    {
+      "path": "app/rules/selectors.py",
+      "ui_sha256": "a9ac3ad04acc8fb95739d18e33213deccc3733cac251d36d057b2cd152d411d6",
+      "core_sha256": "a9ac3ad04acc8fb95739d18e33213deccc3733cac251d36d057b2cd152d411d6",
+      "equal": true
+    },
+    {
+      "path": "app/rules/semantic.py",
+      "ui_sha256": "bc401398bdd9413160bf6bbc79b360aa6bb5a71159dc998061e022fd0068851e",
+      "core_sha256": "bc401398bdd9413160bf6bbc79b360aa6bb5a71159dc998061e022fd0068851e",
+      "equal": true
+    },
+    {
+      "path": "app/rules/v12_operators.py",
+      "ui_sha256": "ab76cba548ef1c6a31bb6edd4fb26f26a3c6bbb90d380f18396d75c86e098d0a",
+      "core_sha256": "ab76cba548ef1c6a31bb6edd4fb26f26a3c6bbb90d380f18396d75c86e098d0a",
+      "equal": true
+    },
+    {
+      "path": "app/security/__init__.py",
+      "ui_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "core_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "equal": true
+    },
+    {
+      "path": "app/security/credentials.py",
+      "ui_sha256": "d5a3a31109caac924af08e383fad605c6ce1d632d506ac6e9583f568edd53cd8",
+      "core_sha256": "d5a3a31109caac924af08e383fad605c6ce1d632d506ac6e9583f568edd53cd8",
+      "equal": true
+    },
+    {
+      "path": "app/security/finding_text.py",
+      "ui_sha256": "838d5ee7f6edfe214b5760b3476654a09d8023ddeac650fed625d39be9680f61",
+      "core_sha256": "838d5ee7f6edfe214b5760b3476654a09d8023ddeac650fed625d39be9680f61",
+      "equal": true
+    },
+    {
+      "path": "app/security/logging.py",
+      "ui_sha256": "1cb606bbd1b124a25f4cc7a0ae77d00d87816f986a2118129b984dbdb6c743cd",
+      "core_sha256": "1cb606bbd1b124a25f4cc7a0ae77d00d87816f986a2118129b984dbdb6c743cd",
+      "equal": true
+    },
+    {
+      "path": "app/security/loopback.py",
+      "ui_sha256": "cbe73f0e11333e209f6493e39cab2243aff1ea255a0ed90543681d62d40590bf",
+      "core_sha256": "cbe73f0e11333e209f6493e39cab2243aff1ea255a0ed90543681d62d40590bf",
+      "equal": true
+    },
+    {
+      "path": "app/security/url_policy.py",
+      "ui_sha256": "aed1ccd02c82051f7f7ffd5b1b868f24bd7493a687980f8b47785571ab9c1dc6",
+      "core_sha256": "aed1ccd02c82051f7f7ffd5b1b868f24bd7493a687980f8b47785571ab9c1dc6",
+      "equal": true
+    },
+    {
+      "path": "app/settings.py",
+      "ui_sha256": "81627c619c23db56a09d10ecab2c1ba3f35bcb542cb78265e565ea974fcb54e4",
+      "core_sha256": "81627c619c23db56a09d10ecab2c1ba3f35bcb542cb78265e565ea974fcb54e4",
+      "equal": true
+    },
+    {
+      "path": "app/storage/__init__.py",
+      "ui_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "core_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "equal": true
+    },
+    {
+      "path": "app/storage/audit.py",
+      "ui_sha256": "4b1738191c559937dbff3d92bb749b5df1026749cca3a1c0c1aafa5e9e708f74",
+      "core_sha256": "4b1738191c559937dbff3d92bb749b5df1026749cca3a1c0c1aafa5e9e708f74",
+      "equal": true
+    },
+    {
+      "path": "app/storage/case_files.py",
+      "ui_sha256": "c75417899d79d2940357e6d3f5063e183c3c01ab8b76404122d6374ed4fa60b3",
+      "core_sha256": "c75417899d79d2940357e6d3f5063e183c3c01ab8b76404122d6374ed4fa60b3",
+      "equal": true
+    },
+    {
+      "path": "app/storage/hashing.py",
+      "ui_sha256": "7b95bd907ab69d6410d8abefd3a55e8d1fefd0619c413ab060000603e16b4c1f",
+      "core_sha256": "7b95bd907ab69d6410d8abefd3a55e8d1fefd0619c413ab060000603e16b4c1f",
+      "equal": true
+    },
+    {
+      "path": "app/storage/paths.py",
+      "ui_sha256": "7b2726a89fe978dc5a98225d74818ba40b4d3eb22a871789580b4a8decefa28b",
+      "core_sha256": "7b2726a89fe978dc5a98225d74818ba40b4d3eb22a871789580b4a8decefa28b",
+      "equal": true
+    },
+    {
+      "path": "config/llm_config.example.json",
+      "ui_sha256": "b3724f58671004e2dd369a4973496f5471e7a32b1a65bc2714a4aef5a077cbce",
+      "core_sha256": "b3724f58671004e2dd369a4973496f5471e7a32b1a65bc2714a4aef5a077cbce",
+      "equal": true
+    },
+    {
+      "path": "web/review_display_queue.js",
+      "ui_sha256": "b4344aef631b16935d128882d7a5b2ca9d5652a6be971cad7f648794342ff592",
+      "core_sha256": "b4344aef631b16935d128882d7a5b2ca9d5652a6be971cad7f648794342ff592",
+      "equal": true
+    },
+    {
+      "path": "web/review_state.js",
+      "ui_sha256": "3947f8ba25c46b8caf191d48a57321455e6f6714b888e5b6416c0f1e4b4cd519",
+      "core_sha256": "3947f8ba25c46b8caf191d48a57321455e6f6714b888e5b6416c0f1e4b4cd519",
+      "equal": true
+    }
+  ]
+}

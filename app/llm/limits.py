@@ -1,0 +1,7 @@
+"""Shared, fixed safety limits for evidence sent to an LLM."""
+
+MAX_LLM_SPANS = 40
+MAX_LLM_TOTAL_CHARACTERS = 24_000
+MAX_LLM_SINGLE_SPAN_CHARACTERS = 4_000
+MAX_LLM_EVIDENCE_IDS = 40
+MAX_LLM_FINDINGS = 8

@@ -142,3 +142,8 @@ finding 走匿名导出后，zip 内不含 provider 名、model、base_url、req
   端点 `GET/POST /api/llm/config`、`POST /api/llm/health`，默认 base_url = DeepSeek 的 Anthropic 网关。
 - 前端：页面「AI 复核设置（可选）」折叠区 + 「测试连接」。
 - 测试全部 mock httpx，不联网；`/security-review` 仍建议在正式启用前再跑一次。
+## 实现状态与安全边界（2026-07）
+
+Anthropic Messages REST 适配器已落地，默认仍使用 No-op Mock，在线 LLM 为 opt-in。配置保存 API Key 到系统凭据存储，不写入配置文件、数据库、日志或响应；修改在线端点或私网模式需要重新输入 API Key。公共端点默认严格要求 HTTPS，私网/本机端点需显式开关并只发送已脱敏材料。LLM 失败保留确定性规则结果，非法 evidence 只丢弃非法 AI findings；前端会明确显示 AI 状态与 finding 来源。
+
+PDF、OCR、RAG、知识图谱和 OpenAI 兼容适配器不在当前实现范围内。正式启动脚本仅支持 loopback，不构成公网部署或公网认证方案。

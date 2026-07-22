@@ -30,7 +30,8 @@ def _external_demo_root(module) -> Path:
 
 def test_run_script_is_loopback_only():
     source = (SCRIPTS / "run_local.py").read_text(encoding="utf-8")
-    assert 'host="127.0.0.1"' in source
+    assert 'assert_loopback_host("127.0.0.1")' in source
+    assert "host=host" in source
     assert "0.0.0.0" not in source
 
 

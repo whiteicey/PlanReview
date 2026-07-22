@@ -13,6 +13,7 @@ from io import BytesIO
 from pathlib import Path
 
 from docx import Document
+import pytest
 
 from app.llm.mock import MockProvider
 from app.llm.provider import LLMRequest
@@ -69,11 +70,10 @@ def test_mock_provider_does_not_follow_document_instructions(tmp_path):
     assert not (tmp_path / "secret.txt").exists()
 
 
-def test_mock_provider_only_reacts_to_its_declared_keyword_pair(tmp_path):
-    # Even a document that *names* the capacity concern only yields the fixed,
-    # evidence-bound finding — the provider reasons over text as data.
+@pytest.mark.parametrize("text", ["高峰产量超过处理能力，请复核。", "高峰产量不超过处理能力。"])
+def test_default_mock_provider_is_a_noop_for_business_text(tmp_path, text):
     document = Document()
-    document.add_paragraph("高峰产量超过处理能力，请复核。")
+    document.add_paragraph(text)
     path = tmp_path / "capacity.docx"
     document.save(path)
     parsed = DocxParser().parse(path, document_id="D-CAP")
@@ -88,8 +88,4 @@ def test_mock_provider_only_reacts_to_its_declared_keyword_pair(tmp_path):
         )
     )
 
-    assert len(response.findings) == 1
-    finding = response.findings[0]
-    assert finding["category"] == "capacity"
-    # Every cited span id is a real parsed span, never fabricated.
-    assert set(finding["evidence_span_ids"]).issubset(set(span_ids))
+    assert response.findings == []

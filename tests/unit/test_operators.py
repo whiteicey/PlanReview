@@ -40,6 +40,8 @@ def fact(
     span_id: str = "s1",
     canonical_name: str | None = None,
     source_version: str | None = None,
+    canonical_unit: str | None = None,
+    unit_category: str | None = None,
 ) -> ParameterFact:
     return ParameterFact(
         fact_id=fid,
@@ -47,6 +49,8 @@ def fact(
         raw_name=raw_name or name,
         raw_value="" if value is None else str(value),
         normalized_value=value,
+        canonical_unit=canonical_unit,
+        unit_category=unit_category,
         subject=subject,
         time_scope=time_scope,
         statistical_scope=statistical_scope,
@@ -96,6 +100,44 @@ def test_required_sections_exist_has_pass_fail_unknown_and_evidence() -> None:
     assert run("required_sections_exist", spans=[present]).status is RuleStatus.UNKNOWN
 
 
+def test_missing_section_uses_at_most_three_structure_anchors_not_document_wide_evidence() -> None:
+    headings = [
+        span(
+            f"heading {index}",
+            sid=f"h{index}",
+            section=f"{index} heading",
+            block_type=BlockType.HEADING,
+        )
+        for index in range(4)
+    ]
+    document_spans = headings + [
+        span(f"body {index}", sid=f"p{index}", section="body")
+        for index in range(1713)
+    ]
+
+    outcome = run(
+        "required_sections_exist",
+        spans=document_spans,
+        params={"required_sections": ["missing section"]},
+    )
+
+    assert outcome.status is RuleStatus.FAIL
+    assert outcome.evidence_span_ids == ["h0", "h1", "h2"]
+    assert outcome.details["evidence_source"] == "structure_index"
+
+
+def test_section_matching_does_not_treat_3_10_as_3_1() -> None:
+    wrong = span("x", sid="wrong", section="3.10 其他章节")
+    right = span("x", sid="right", section="3.1 目标章节")
+
+    assert run(
+        "required_sections_exist", spans=[wrong], params={"required_sections": ["3.1"]}
+    ).status is RuleStatus.FAIL
+    assert run(
+        "required_sections_exist", spans=[right], params={"required_sections": ["3.1"]}
+    ).status is RuleStatus.PASS
+
+
 def test_required_parameter_table_exists_has_pass_fail_unknown() -> None:
     table_cell = span(
         "36", sid="cell", section="附件A关键参数表", block_type=BlockType.TABLE_CELL
@@ -133,39 +175,129 @@ def test_all_equal_has_pass_fail_unknown_and_never_compares_different_scopes() -
 
 def test_sum_equals_has_pass_fail_unknown_and_requires_one_shared_full_key() -> None:
     params = {"target": "总数", "components": ["甲", "乙"]}
-    facts = [fact("t", "总数", 36, span_id="t"), fact("a", "甲", 30, span_id="a"), fact("b", "乙", 6, span_id="b")]
+    facts = [
+        fact("t", "总数", 36, span_id="t", canonical_unit="口", unit_category="count"),
+        fact("a", "甲", 30, span_id="a", canonical_unit="口", unit_category="count"),
+        fact("b", "乙", 6, span_id="b", canonical_unit="口", unit_category="count"),
+    ]
     assert run("sum_equals", facts, params=params).status is RuleStatus.PASS
-    assert run("sum_equals", [facts[0], facts[1], fact("b", "乙", 7)], params=params).status is RuleStatus.FAIL
+    assert run("sum_equals", [facts[0], facts[1], fact("b", "乙", 7, canonical_unit="口", unit_category="count")], params=params).status is RuleStatus.FAIL
     # Different operands may hold different scopes (each is a distinct quantity);
     # only each operand's own value must be complete and internally consistent.
-    assert run("sum_equals", [facts[0], facts[1], fact("b", "乙", 6, time_scope="达产期")], params=params).status is RuleStatus.PASS
+    assert run("sum_equals", [facts[0], facts[1], fact("b", "乙", 6, time_scope="达产期", canonical_unit="口", unit_category="count")], params=params).status is RuleStatus.PASS
     # A single operand appearing with two conflicting complete values is UNKNOWN.
-    assert run("sum_equals", [facts[0], facts[1], facts[2], fact("b2", "乙", 8)], params=params).status is RuleStatus.UNKNOWN
+    assert run("sum_equals", [facts[0], facts[1], facts[2], fact("b2", "乙", 8, canonical_unit="口", unit_category="count")], params=params).status is RuleStatus.UNKNOWN
     # An operand present only without a complete key is UNKNOWN.
-    assert run("sum_equals", [facts[0], facts[1], fact("b", "乙", 6, time_scope=None)], params=params).status is RuleStatus.UNKNOWN
+    assert run("sum_equals", [facts[0], facts[1], fact("b", "乙", 6, time_scope=None, canonical_unit="口", unit_category="count")], params=params).status is RuleStatus.UNKNOWN
     assert run("sum_equals", facts[:2], params=params).status is RuleStatus.UNKNOWN
 
 
 def test_product_approximately_equals_has_pass_fail_unknown_and_scope_matching() -> None:
     params = {"left": ["井数", "单井产能"], "right": "总产能", "relative_tolerance": 0.05}
-    facts = [fact("w", "井数", 36), fact("r", "单井产能", 5), fact("t", "总产能", 180)]
+    facts = [
+        fact("w", "井数", 36, canonical_unit="口", unit_category="count"),
+        fact("r", "单井产能", 5, canonical_unit="m^3/day", unit_category="flow"),
+        fact("t", "总产能", 180, canonical_unit="m^3/day", unit_category="flow"),
+    ]
     assert run("product_approximately_equals", facts, params=params).status is RuleStatus.PASS
-    assert run("product_approximately_equals", [facts[0], facts[1], fact("t", "总产能", 160)], params=params).status is RuleStatus.FAIL
+    assert run("product_approximately_equals", [facts[0], facts[1], fact("t", "总产能", 160, canonical_unit="m^3/day", unit_category="flow")], params=params).status is RuleStatus.FAIL
     # Cross-operand scope differences are expected (count vs capacity live in
     # different stages); the product still compares.
-    assert run("product_approximately_equals", [facts[0], facts[1], fact("t", "总产能", 180, subject="单井")], params=params).status is RuleStatus.PASS
+    assert run("product_approximately_equals", [facts[0], facts[1], fact("t", "总产能", 180, subject="单井", canonical_unit="m^3/day", unit_category="flow")], params=params).status is RuleStatus.PASS
     assert run("product_approximately_equals", facts[:2], params=params).status is RuleStatus.UNKNOWN
+
+
+def test_cross_parameter_arithmetic_rejects_incomplete_siblings() -> None:
+    params = {"left": "高峰产量", "right": "处理能力"}
+    complete_left = fact("l", "高峰产量", 170, canonical_unit="m^3/day", unit_category="flow")
+    complete_right = fact("r", "处理能力", 200, canonical_unit="m^3/day", unit_category="flow")
+    incomplete_sibling = fact(
+        "r-incomplete", "处理能力", 200, time_scope=None,
+        canonical_unit="m^3/day", unit_category="flow",
+    )
+
+    outcome = run("less_or_equal", [complete_left, complete_right, incomplete_sibling], params=params)
+
+    assert outcome.status is RuleStatus.UNKNOWN
+
+
+def test_cross_parameter_arithmetic_rejects_all_null_scope_sibling() -> None:
+    params = {"left": "高峰产量", "right": "处理能力"}
+    complete_left = fact("l", "高峰产量", 170, canonical_unit="m^3/day", unit_category="flow")
+    complete_right = fact("r", "处理能力", 200, canonical_unit="m^3/day", unit_category="flow")
+    incomplete = fact(
+        "r-null",
+        "处理能力",
+        200,
+        subject=None,
+        time_scope=None,
+        statistical_scope=None,
+        condition=None,
+        canonical_unit="m^3/day",
+        unit_category="flow",
+    )
+
+    outcome = run("less_or_equal", [complete_left, complete_right, incomplete], params=params)
+
+    assert outcome.status is RuleStatus.UNKNOWN
+
+
+def test_merged_fact_and_span_ids_remain_in_operator_evidence() -> None:
+    params = {"left": "高峰产量", "right": "处理能力"}
+    left = fact("l", "高峰产量", 170, span_id="table-left", canonical_unit="m^3/day", unit_category="flow").model_copy(
+        update={"merged_fact_ids": ["prose-left"], "merged_span_ids": ["prose-span"]}
+    )
+    right = fact("r", "处理能力", 200, span_id="table-right", canonical_unit="m^3/day", unit_category="flow")
+
+    outcome = run("less_or_equal", [left, right], params=params)
+
+    assert outcome.status is RuleStatus.PASS
+    assert outcome.involved_fact_ids == ["l", "prose-left", "r"]
+    assert outcome.evidence_span_ids == ["table-left", "prose-span", "table-right"]
 
 
 def test_less_or_equal_has_pass_fail_unknown_and_scope_matching() -> None:
     params = {"left": "高峰产量", "right": "处理能力"}
-    left, right = fact("l", "高峰产量", 170), fact("r", "处理能力", 200)
+    left = fact("l", "高峰产量", 170, canonical_unit="m^3/day", unit_category="flow")
+    right = fact("r", "处理能力", 200, canonical_unit="m^3/day", unit_category="flow")
     assert run("less_or_equal", [left, right], params=params).status is RuleStatus.PASS
-    assert run("less_or_equal", [fact("l", "高峰产量", 220), right], params=params).status is RuleStatus.FAIL
+    assert run("less_or_equal", [fact("l", "高峰产量", 220, canonical_unit="m^3/day", unit_category="flow"), right], params=params).status is RuleStatus.FAIL
     # Peak output (达产期) and processing capacity (设计期) naturally differ in
     # scope; the comparison still holds.
-    assert run("less_or_equal", [left, fact("r", "处理能力", 200, statistical_scope="日峰值")], params=params).status is RuleStatus.PASS
-    assert run("less_or_equal", [left, fact("r", "处理能力", None)], params=params).status is RuleStatus.UNKNOWN
+    assert run("less_or_equal", [left, fact("r", "处理能力", 200, statistical_scope="日峰值", canonical_unit="m^3/day", unit_category="flow")], params=params).status is RuleStatus.PASS
+    assert run("less_or_equal", [left, fact("r", "处理能力", None, canonical_unit="m^3/day", unit_category="flow")], params=params).status is RuleStatus.UNKNOWN
+
+
+def test_arithmetic_units_are_required_and_dimension_safe() -> None:
+    params = {"left": "高峰产量", "right": "处理能力"}
+    flow_left = fact("l", "高峰产量", 2739726.02739726, canonical_unit="m^3/day", unit_category="flow")
+    flow_right = fact("r", "处理能力", 3000000, canonical_unit="m^3/day", unit_category="flow")
+    assert run("less_or_equal", [flow_left, flow_right], params=params).status is RuleStatus.PASS
+    assert run(
+        "less_or_equal",
+        [fact("l", "高峰产量", 4000000, canonical_unit="m^3/day", unit_category="flow"), flow_right],
+        params=params,
+    ).status is RuleStatus.FAIL
+    assert run(
+        "less_or_equal",
+        [fact("l", "高峰产量", 10, canonical_unit="口", unit_category="count"), flow_right],
+        params=params,
+    ).status is RuleStatus.UNKNOWN
+    assert run(
+        "less_or_equal",
+        [fact("l", "高峰产量", 10), flow_right],
+        params=params,
+    ).status is RuleStatus.UNKNOWN
+
+    sum_params = {"target": "总量", "components": ["部分"]}
+    assert run(
+        "sum_equals",
+        [
+            fact("t", "总量", 10, canonical_unit="m^3/day", unit_category="flow"),
+            fact("c", "部分", 10, canonical_unit="口", unit_category="count"),
+        ],
+        params=sum_params,
+    ).status is RuleStatus.UNKNOWN
 
 
 def test_change_requires_reason_has_pass_fail_unknown_and_scope_matching() -> None:
@@ -208,6 +340,114 @@ def test_change_requires_reason_has_pass_fail_unknown_and_scope_matching() -> No
     assert run("change_requires_reason", [single, versionless], params=params).status is RuleStatus.UNKNOWN
     # No usable facts at all remains UNKNOWN.
     assert run("change_requires_reason", [], params=params).status is RuleStatus.UNKNOWN
+
+
+def _change_cell(text, *, table, row, col, sid):
+    return SourceSpan(
+        span_id=sid,
+        document_id="D",
+        section_path=["审查意见回复表"],
+        block_type=BlockType.TABLE_CELL,
+        table_index=table,
+        row_index=row,
+        column_index=col,
+        text=text,
+        text_hash=f"hash-{sid}",
+    )
+
+
+def _changed_facts():
+    return [
+        fact("old", "建设周期", 24, source_version="v1", span_id="old"),
+        fact("new", "建设周期", 30, source_version="v2", span_id="new"),
+    ]
+
+
+def test_change_reason_uses_complete_rows_and_variable_column_order():
+    cells = [
+        _change_cell("说明", table=1, row=0, col=0, sid="h-reason"),
+        _change_cell("调整后", table=1, row=0, col=1, sid="h-new"),
+        _change_cell("参数名称", table=1, row=0, col=2, sid="h-param"),
+        _change_cell("调整前", table=1, row=0, col=3, sid="h-old"),
+        _change_cell("地面条件变化", table=1, row=1, col=0, sid="r1-reason"),
+        _change_cell("30", table=1, row=1, col=1, sid="r1-new"),
+        _change_cell("建设周期", table=1, row=1, col=2, sid="r1-param"),
+        _change_cell("24", table=1, row=1, col=3, sid="r1-old"),
+        # A merged XML cell may be exposed in more than one grid column.
+        _change_cell("地面条件变化", table=1, row=1, col=4, sid="r1-reason"),
+    ]
+    outcome = run(
+        "change_requires_reason",
+        _changed_facts(),
+        cells,
+        {"parameter": "建设周期", "reason_terms": ["原因"]},
+    )
+    assert outcome.status is RuleStatus.PASS
+    assert "r1-reason" in outcome.evidence_span_ids
+
+
+@pytest.mark.parametrize("invalid", ["", "未说明", "无", "无原因", "不详", "原因不明", "待补充"])
+def test_every_matching_change_row_requires_a_valid_reason(invalid):
+    cells = [
+        _change_cell("指标", table=2, row=0, col=0, sid="h0"),
+        _change_cell("原值", table=2, row=0, col=1, sid="h1"),
+        _change_cell("新值", table=2, row=0, col=2, sid="h2"),
+        _change_cell("变更原因", table=2, row=0, col=3, sid="h3"),
+        _change_cell("建设周期", table=2, row=1, col=0, sid="a0"),
+        _change_cell("24", table=2, row=1, col=1, sid="a1"),
+        _change_cell("30", table=2, row=1, col=2, sid="a2"),
+        _change_cell("政策调整", table=2, row=1, col=3, sid="a3"),
+        _change_cell("建设周期", table=2, row=2, col=0, sid="b0"),
+        _change_cell("30", table=2, row=2, col=1, sid="b1"),
+        _change_cell("32", table=2, row=2, col=2, sid="b2"),
+    ]
+    if invalid:
+        cells.append(_change_cell(invalid, table=2, row=2, col=3, sid="b3"))
+    outcome = run(
+        "change_requires_reason",
+        _changed_facts(),
+        cells,
+        {"parameter": "建设周期", "reason_terms": ["原因"]},
+    )
+    assert outcome.status is RuleStatus.FAIL
+
+
+def test_relevant_change_table_without_reliable_headers_is_unknown():
+    cells = [
+        _change_cell("项目", table=3, row=0, col=0, sid="h0"),
+        _change_cell("备注", table=3, row=0, col=1, sid="h1"),
+        _change_cell("建设周期", table=3, row=1, col=0, sid="d0"),
+        _change_cell("地面条件变化", table=3, row=1, col=1, sid="d1"),
+    ]
+    outcome = run(
+        "change_requires_reason",
+        _changed_facts(),
+        cells,
+        {"parameter": "建设周期", "reason_terms": ["原因"]},
+    )
+    assert outcome.status is RuleStatus.UNKNOWN
+
+
+def test_change_reason_checks_all_relevant_tables():
+    cells = []
+    for table, reason in ((4, "方案优化"), (5, "待补充")):
+        cells.extend([
+            _change_cell("参数", table=table, row=0, col=0, sid=f"{table}-h0"),
+            _change_cell("调整前", table=table, row=0, col=1, sid=f"{table}-h1"),
+            _change_cell("调整后", table=table, row=0, col=2, sid=f"{table}-h2"),
+            _change_cell("调整原因", table=table, row=0, col=3, sid=f"{table}-h3"),
+            _change_cell("建设周期", table=table, row=1, col=0, sid=f"{table}-d0"),
+            _change_cell("24", table=table, row=1, col=1, sid=f"{table}-d1"),
+            _change_cell("30", table=table, row=1, col=2, sid=f"{table}-d2"),
+            _change_cell(reason, table=table, row=1, col=3, sid=f"{table}-d3"),
+        ])
+    outcome = run(
+        "change_requires_reason",
+        _changed_facts(),
+        cells,
+        {"parameter": "建设周期", "reason_terms": ["原因"]},
+    )
+    assert outcome.status is RuleStatus.FAIL
 
 
 def _reply_cell(text, *, row, col, sid):
@@ -262,18 +502,47 @@ def test_issue_response_status_exists_has_pass_fail_unknown() -> None:
 
 def test_alias_normalization_has_pass_fail_unknown() -> None:
     params = {"canonical_name": "开发井总数", "aliases": ["钻井总数"]}
-    assert run("alias_normalization", [fact("a", "开发井总数", 36, raw_name="钻井总数")], params=params).status is RuleStatus.PASS
+    assert run("alias_normalization", [fact("a", "开发井总数", 36)], params=params).status is RuleStatus.PASS
     assert run(
         "alias_normalization",
-        [fact("a", "钻井总数", 36, raw_name="钻井总数")],
+        [fact("a", "开发井总数", 36, raw_name="钻井总数")],
         params=params,
     ).status is RuleStatus.FAIL
     assert run("alias_normalization", [], params=params).status is RuleStatus.UNKNOWN
 
 
 def test_evidence_required_has_pass_fail_unknown() -> None:
-    assert run("evidence_required", spans=[span("证据")], params={"min_evidence": 1}).status is RuleStatus.PASS
-    assert run("evidence_required", spans=[span("仅一条")], params={"min_evidence": 2}).status is RuleStatus.FAIL
-    missing = run("evidence_required", spans=[], params={"min_evidence": 1})
+    supported = [fact("f1", "指标", 1, span_id="s1"), fact("f2", "指标", 2, span_id="s2")]
+    available = [span("证据", sid="s1"), span("第二条", sid="s2")]
+    assert run(
+        "evidence_required", supported, available,
+        {"parameter": "指标", "min_evidence": 2},
+    ).status is RuleStatus.PASS
+    assert run(
+        "evidence_required", supported[:1], available[:1],
+        {"parameter": "指标", "min_evidence": 2},
+    ).status is RuleStatus.FAIL
+    missing = run("evidence_required", spans=available, params={"parameter": "不存在", "min_evidence": 1})
     assert missing.status is RuleStatus.UNKNOWN
     assert missing.evidence_span_ids == []
+
+
+def test_evidence_required_fails_closed_for_missing_or_ghost_fact_spans() -> None:
+    valid = fact("f1", "指标", 1, span_id="s1")
+    missing_span = fact("f2", "指标", 2, span_id="")
+    ghost_span = fact("f3", "指标", 3, span_id="ghost")
+    context_spans = [span("真实", sid="s1")]
+
+    missing = run("evidence_required", [missing_span], context_spans, {"parameter": "指标", "min_evidence": 1})
+    assert missing.status is RuleStatus.FAIL
+    assert missing.evidence_span_ids == []
+    assert missing.details["missing_span_fact_ids"] == ["f2"]
+
+    ghost = run("evidence_required", [ghost_span], context_spans, {"parameter": "指标", "min_evidence": 1})
+    assert ghost.status is RuleStatus.FAIL
+    assert ghost.evidence_span_ids == []
+    assert ghost.details["invalid_fact_ids"] == ["f3"]
+
+    enough = run("evidence_required", [valid], context_spans, {"parameter": "指标", "min_evidence": 1})
+    assert enough.status is RuleStatus.PASS
+    assert enough.evidence_span_ids == ["s1"]

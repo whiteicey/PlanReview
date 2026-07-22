@@ -1,14 +1,14 @@
 # DEMO golden status deviation
 
 This project's checked-in golden mirror (`tests/golden/golden_cases_demo.expected.jsonl`)
-deviates from the external DEMO oracle (`本地版示例数据包/golden/golden_cases_demo.jsonl`)
+deviates from the bundled DEMO oracle (`本地版示例数据包/golden/golden_cases_demo.jsonl`)
 in the ways recorded below. Every deviation is an honesty correction: the mirror
 asserts only what the generic, first-principles engine actually produces from real
 facts, SourceSpans, and structure — never a value tuned to a removed shortcut.
 
 ## 1. Three-valued status contract (D3)
 
-The external package uses two extended status labels outside this project's
+The bundled package uses two extended status labels outside this project's
 three-valued `RuleStatus` (PASS / FAIL / UNKNOWN):
 
 - `VERSION-001: SUSPECTED` → represented as `FAIL`/`UNKNOWN` per parameter with a
@@ -19,7 +19,7 @@ three-valued `RuleStatus` (PASS / FAIL / UNKNOWN):
 
 ## 2. G-007 operator correction
 
-The original external line used `CONSISTENCY-001` for a unit-conversion scenario, but
+The original bundled line used `CONSISTENCY-001` for a unit-conversion scenario, but
 its facts are `开发井总数=2`, `单井设计产能=5万m³/d`, `总设计产能=100000 m³/d`. The
 mirror uses `CONSISTENCY-003=PASS`, because `product_approximately_equals` is the
 coherent rule for convertible units after normalization.
@@ -99,3 +99,6 @@ mirror and documented here rather than faked:
 The external source was backed up before any correction as
 `golden_cases_demo.jsonl.orig` (outside git). The repository mirror is the normalized,
 honest source used by tests.
+## 当前收口后的解释
+
+Golden/DEMO 规则仍是 `DEMO_ONLY` 演示数据，不是 42 章正式规则库。RuleStatus 继续只有 `PASS`、`FAIL`、`UNKNOWN`；证据缺失、章节不确定或不完整 sibling 均保持 fail-closed，不把 UNKNOWN 改成 PASS。LLM 是初审补充来源，ProviderError、配置错误和输入超限不会覆盖规则 Finding；非法 evidence 不保存为 AI Finding。上述行为差异是明确的安全语义，不是降低断言。

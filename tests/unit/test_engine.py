@@ -21,7 +21,7 @@ def rule(
         rule_id=rule_id,
         version="0.1",
         name="required",
-        category="c",
+        category="other",
         severity=Severity.LOW,
         operator="required_sections_exist",
         on_missing=on_missing,
@@ -47,11 +47,13 @@ def test_engine_converts_operator_outcome_to_full_result() -> None:
     assert result.status is RuleStatus.FAIL
     assert result.rule_id == "R1"
     assert result.severity is Severity.LOW
-    assert result.category == "c"
+    assert result.category == "other"
     assert result.message == "缺少章节"
-    assert result.evidence_span_ids == ["s"]
+    # Missing-content findings use a structure-index anchor rather than the
+    # whole document as a misleading fallback evidence set.
+    assert result.evidence_span_ids == []
     assert result.involved_fact_ids == []
-    assert result.details == {"missing": ["不存在"]}
+    assert result.details == {"missing": ["不存在"], "evidence_source": "structure_index"}
     assert result.needs_human_review is False
 
 
@@ -61,7 +63,7 @@ def test_engine_deep_copies_nested_result_details() -> None:
     result.details["missing"].append("mutated")
     rerun = RuleEngine().evaluate([rule("R1")], [], [span()])[0]
 
-    assert rerun.details == {"missing": ["不存在"]}
+    assert rerun.details == {"missing": ["不存在"], "evidence_source": "structure_index"}
 
 
 def test_engine_applies_unknown_missing_policies_without_fabricating_pass() -> None:
