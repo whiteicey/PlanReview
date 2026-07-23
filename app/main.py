@@ -20,6 +20,7 @@ from app.review.parsed_cache import ParsedDocumentCache
 from app.settings import get_settings
 from app.storage.audit import warn_recovery_required
 from app.security.loopback import assert_loopback_host
+from app.experience.runner import ExperienceJobRunner
 
 
 @asynccontextmanager
@@ -29,15 +30,20 @@ async def lifespan(application: FastAPI):
     runtime.initialize()
     application.state.database_runtime = runtime
     application.state.parsed_document_cache = ParsedDocumentCache(max_cases=8)
+    application.state.experience_job_runner = ExperienceJobRunner(
+        runtime, application.state.parsed_document_cache, settings
+    )
     session = runtime.session()
     try:
         ReviewRepository(session).interrupt_orphaned_runs()
         warn_recovery_required(session, settings.runtime_root)
     finally:
         session.close()
+    application.state.experience_job_runner.start()
     try:
         yield
     finally:
+        application.state.experience_job_runner.shutdown()
         current_runtime = getattr(application.state, "database_runtime", runtime)
         current_runtime.dispose()
 

@@ -128,6 +128,7 @@ def _upgrade_schema(engine: Engine) -> None:
             "is_expert_experience": "BOOLEAN NOT NULL DEFAULT 0",
             "experience_saved_at": "DATETIME",
             "experience_updated_at": "DATETIME",
+            "experience_summary_job_id": "VARCHAR(36)",
         },
     }
     with engine.begin() as connection:

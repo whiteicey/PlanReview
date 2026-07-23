@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 from contextvars import ContextVar
+from dataclasses import asdict
+import logging
 from pathlib import Path
 from threading import RLock
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.schemas import (
     CaseCreated,
     DeleteCaseRequest,
+    ExpertExperienceDigest,
     ExpertExperienceSummary,
     ExportFormat,
     FindingResponse,
@@ -65,7 +69,17 @@ from app.llm.provider import (
 from app.parsers.docx_parser import DocxParser
 from app.persistence.db import DatabaseRuntime
 from app.persistence.models import CaseRecord
+from app.persistence.models import ExpertExperienceSummaryJobORM, FindingORM, ReviewRunORM
 from app.persistence.repository import ReviewRepository
+from app.experience.repository import ExperienceRepository
+from app.experience.schemas import (
+    ExperienceDeleteRequest,
+    ExperienceJobResponse,
+    ExperienceListItem,
+    ExperienceListResponse,
+    ExperienceMutationResponse,
+    ExperienceSummary,
+)
 from app.reports.exporters import export_anonymous_package, export_excel, export_word
 from app.review.pipeline import ReviewPipeline
 from app.review.background_jobs import cache_key, execute_review_job
@@ -254,6 +268,19 @@ def _run_for_case(case_id: str, run_id: str):
 def _finding_response(item) -> FindingResponse:
     if item.run_id is None:
         raise ValueError("finding is not bound to a review run")
+    session = _REQUEST_SESSION.get()
+    row = None if session is None else session.scalar(
+        select(FindingORM).join(ReviewRunORM).where(
+            ReviewRunORM.run_id == item.run_id,
+            FindingORM.finding_id == item.finding_id,
+        )
+    )
+    job = None if row is None or not row.experience_summary_job_id else session.get(
+        ExpertExperienceSummaryJobORM, row.experience_summary_job_id
+    )
+    experience_status = (
+        "NOT_REQUESTED" if not item.is_expert_experience else (job.status if job is not None else "NOT_REQUESTED")
+    )
     return FindingResponse(
         run_id=item.run_id,
         finding_id=item.finding_id,
@@ -273,6 +300,8 @@ def _finding_response(item) -> FindingResponse:
         is_expert_experience=item.is_expert_experience,
         experience_saved_at=item.experience_saved_at,
         experience_updated_at=item.experience_updated_at,
+        experience_id=None if job is None else job.job_id,
+        experience_summary_status=experience_status,
     )
 
 
@@ -812,6 +841,7 @@ def list_findings(case_id: str) -> list[FindingResponse]:
 
 
 def _update_run_finding(
+    request: Request,
     case_id: str,
     run_id: str,
     finding_id: str,
@@ -823,7 +853,7 @@ def _update_run_finding(
     run_id = _run_id(run_id)
     repository = _repository()
     try:
-        experience_summary = repository.update_finding_review(
+        repository.update_finding_review(
             case_id,
             run_id,
             finding_id,
@@ -846,11 +876,39 @@ def _update_run_finding(
     )
     if finding is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "指定 Run 中未找到该问题")
+    experience_repository = ExperienceRepository(_REQUEST_SESSION.get())
+    requested = None
+    request_failed = False
+    try:
+        requested = experience_repository.synchronize_after_review(case_id, run_id, finding_id)
+        if requested is not None and requested.status == "PENDING":
+            runner = getattr(request.app.state, "experience_job_runner", None)
+            if runner is not None:
+                runner.enqueue(requested.job_id)
+    except Exception:
+        request_failed = True
+        logging.warning("Unable to create expert-experience job after review save", exc_info=True)
+    finding_row = experience_repository._finding(case_id, run_id, finding_id)
+    assert finding_row is not None
+    job = None if not finding_row.experience_summary_job_id else experience_repository.get_job(
+        finding_row.experience_summary_job_id
+    )
+    job_status = "FAILED" if request_failed else (
+        "NOT_REQUESTED" if requested is None else requested.status
+    )
+    total_count = experience_repository.active_count()
     return FindingReviewResponse(
-        **_finding_response(finding).model_dump(),
+        **_finding_response(finding).model_dump(exclude={"experience_id", "experience_summary_status"}),
         review_saved=True,
-        expert_experience_saved=finding.is_expert_experience,
-        expert_experience_total_count=experience_summary.total_count,
+        expert_experience_saved=job_status == "COMPLETED" and job is not None and not job.experience_is_deleted,
+        expert_experience_requested=finding.is_expert_experience,
+        expert_experience_total_count=total_count,
+        experience_id=None if job is None else job.job_id,
+        experience_summary_status=job_status,
+        experience_summary_job_id=None if job is None else job.job_id,
+        source_run_id=run_id,
+        source_finding_id=finding_id,
+        finding_row_id=finding_row.id,
     )
 
 
@@ -860,14 +918,157 @@ def expert_experience_summary() -> ExpertExperienceSummary:
     return ExpertExperienceSummary(total_count=summary.total_count, updated_at=summary.updated_at)
 
 
+@router.get("/expert-experiences/digest", response_model=ExpertExperienceDigest)
+def expert_experience_digest(limit: int = Query(default=8, ge=1, le=50)) -> ExpertExperienceDigest:
+    digest = _repository().get_expert_experience_digest(limit)
+    return ExpertExperienceDigest(
+        total_count=digest.total_count,
+        updated_at=digest.updated_at,
+        status_counts=digest.status_counts,
+        categories=[asdict(item) for item in digest.categories],
+        recent_conclusions=[asdict(item) for item in digest.recent_conclusions],
+    )
+
+
+def _experience_job_response(job: ExpertExperienceSummaryJobORM) -> ExperienceJobResponse:
+    finding = _REQUEST_SESSION.get().get(FindingORM, job.finding_row_id)
+    if finding is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "专家经验来源不存在")
+    summary = ExperienceSummary.model_validate(job.summary_json) if job.summary_json else None
+    return ExperienceJobResponse(
+        job_id=job.job_id,
+        experience_id=job.job_id,
+        source_run_id=job.source_run_id,
+        source_finding_id=job.source_finding_id,
+        finding_row_id=job.finding_row_id,
+        status="DELETED" if job.experience_is_deleted else job.status,
+        expert_review_status=finding.review_status,
+        experience_summary=summary,
+        error_summary=job.error_summary,
+        expert_experience_total_count=ExperienceRepository(_REQUEST_SESSION.get()).active_count(),
+        updated_at=job.updated_at,
+    )
+
+
+@router.get("/expert-experience-summary-jobs/{job_id}", response_model=ExperienceJobResponse)
+def get_experience_summary_job(job_id: str) -> ExperienceJobResponse:
+    job = ExperienceRepository(_REQUEST_SESSION.get()).get_job(_run_id(job_id))
+    if job is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "专家经验归纳任务不存在")
+    return _experience_job_response(job)
+
+
+@router.post(
+    "/cases/{case_id}/runs/{run_id}/findings/{finding_id}/expert-experience/retry",
+    response_model=ExperienceJobResponse,
+)
+def retry_experience_summary(
+    case_id: str, run_id: str, finding_id: str, request: Request
+) -> ExperienceJobResponse:
+    repository = ExperienceRepository(_REQUEST_SESSION.get())
+    try:
+        requested = repository.synchronize_after_review(
+            _case_id(case_id), _run_id(run_id), finding_id, force_retry=True
+        )
+    except KeyError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "指定Run中未找到该问题") from exc
+    if requested is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "该问题未请求沉淀专家经验")
+    if requested.status == "PENDING":
+        runner = getattr(request.app.state, "experience_job_runner", None)
+        if runner is not None:
+            runner.enqueue(requested.job_id)
+    job = repository.get_job(requested.job_id)
+    assert job is not None
+    return _experience_job_response(job)
+
+
+@router.get("/expert-experiences", response_model=ExperienceListResponse)
+def list_expert_experiences(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    q: str | None = Query(default=None, max_length=200),
+    severity: str | None = Query(default=None),
+    origin: str | None = Query(default=None),
+    rule_id: str | None = Query(default=None, max_length=255),
+    view: str = Query(default="active", pattern="^(active|deleted|failed)$"),
+) -> ExperienceListResponse:
+    repository = ExperienceRepository(_REQUEST_SESSION.get())
+    rows, total, active, deleted, failed, updated_at = repository.list_current(
+        page=page, page_size=page_size, query=q, severity=severity,
+        origin=origin, rule_id=rule_id, view=view,
+    )
+    items = []
+    for job, finding in rows:
+        items.append(ExperienceListItem(
+            experience_id=job.job_id,
+            source_case_id=finding.review_run.case_id,
+            source_run_id=job.source_run_id,
+            source_finding_id=job.source_finding_id,
+            finding_row_id=finding.id,
+            status="DELETED" if job.experience_is_deleted else job.status,
+            expert_review_status=finding.review_status,
+            title=finding.title,
+            category=finding.category,
+            severity=finding.severity,
+            origin=finding.origin,
+            rule_id=finding.rule_id,
+            expert_note=finding.human_note,
+            summary=ExperienceSummary.model_validate(job.summary_json) if job.summary_json else None,
+            summary_model=job.summary_model,
+            saved_at=job.completed_at,
+            updated_at=job.updated_at,
+        ))
+    return ExperienceListResponse(
+        items=items, total_count=total, active_count=active, deleted_count=deleted,
+        failed_count=failed, page=page, page_size=page_size, updated_at=updated_at,
+    )
+
+
+@router.delete("/expert-experiences/{experience_id}", response_model=ExperienceMutationResponse)
+def delete_expert_experience(
+    experience_id: str,
+    body: ExperienceDeleteRequest | None = Body(default=None),
+) -> ExperienceMutationResponse:
+    repository = ExperienceRepository(_REQUEST_SESSION.get())
+    try:
+        job = repository.delete(_run_id(experience_id), None if body is None else body.reason)
+    except KeyError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "专家经验不存在") from exc
+    return ExperienceMutationResponse(
+        experience_id=job.job_id, status="DELETED", deleted=True,
+        expert_experience_total_count=repository.active_count(),
+        deleted_experience_count=repository.deleted_count(),
+    )
+
+
+@router.post("/expert-experiences/{experience_id}/restore", response_model=ExperienceMutationResponse)
+def restore_expert_experience(experience_id: str, request: Request) -> ExperienceMutationResponse:
+    repository = ExperienceRepository(_REQUEST_SESSION.get())
+    try:
+        job, requested = repository.restore(_run_id(experience_id))
+    except KeyError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "专家经验不存在") from exc
+    if requested is not None:
+        runner = getattr(request.app.state, "experience_job_runner", None)
+        if runner is not None:
+            runner.enqueue(requested.job_id)
+    return ExperienceMutationResponse(
+        experience_id=job.job_id, status=job.status, deleted=job.experience_is_deleted,
+        expert_experience_total_count=repository.active_count(),
+        deleted_experience_count=repository.deleted_count(),
+    )
+
+
 @router.patch(
     "/cases/{case_id}/runs/{run_id}/findings/{finding_id}",
     response_model=FindingReviewResponse,
 )
 def update_run_finding(
-    case_id: str, run_id: str, finding_id: str, update: FindingReviewBody
+    case_id: str, run_id: str, finding_id: str, update: FindingReviewBody, request: Request
 ) -> FindingReviewResponse:
     return _update_run_finding(
+        request,
         case_id,
         run_id,
         finding_id,
@@ -878,8 +1079,9 @@ def update_run_finding(
 
 
 @router.patch("/findings/{finding_id}", response_model=FindingReviewResponse)
-def update_finding(finding_id: str, update: FindingReviewUpdate) -> FindingReviewResponse:
+def update_finding(finding_id: str, update: FindingReviewUpdate, request: Request) -> FindingReviewResponse:
     return _update_run_finding(
+        request,
         update.case_id,
         update.run_id,
         finding_id,

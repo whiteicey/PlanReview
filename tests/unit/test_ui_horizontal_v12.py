@@ -15,6 +15,7 @@ def test_horizontal_ui_assets_exist_and_load_once_in_dependency_order():
         "workbench_state.js",
         "review_display_queue.js",
         "review_progress.js",
+        "expert_experience.js",
         "app.js",
     ]
     assert scripts == expected
@@ -83,7 +84,10 @@ def test_expert_experience_ui_uses_live_api_counts_and_display_only_events() -> 
     assert 'id="reload-expert-experiences"' in html
     assert 'id="load-expert-experiences"' in html
     assert 'id="expert-experience-status"' in html
-    assert "/api/expert-experiences/summary" in app
+    assert 'id="expert-experience-digest"' in html
+    assert "/api/expert-experiences/digest?limit=8" in app
+    assert "renderExpertExperienceDigest" in app
+    assert "最近归纳" in app
     assert "expert_experience_total_count" in app
     assert "is_expert_experience" in app
     assert "正在加载专家经验库" in app

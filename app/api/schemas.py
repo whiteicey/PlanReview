@@ -146,6 +146,8 @@ class FindingResponse(BaseModel):
     is_expert_experience: bool = False
     experience_saved_at: datetime | None = None
     experience_updated_at: datetime | None = None
+    experience_id: str | None = None
+    experience_summary_status: str = "NOT_REQUESTED"
 
 
 class FindingReviewUpdate(BaseModel):
@@ -187,10 +189,39 @@ class ExpertExperienceSummary(BaseModel):
     updated_at: datetime | None = None
 
 
+class ExpertExperienceCategory(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    category: FindingCategory
+    count: int = Field(ge=1)
+
+
+class ExpertExperienceConclusion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    category: FindingCategory
+    rule_id: str | None = None
+    review_status: ReviewStatus
+    expert_note: str | None = None
+    updated_at: datetime
+
+
+class ExpertExperienceDigest(ExpertExperienceSummary):
+    status_counts: dict[ReviewStatus, int]
+    categories: list[ExpertExperienceCategory]
+    recent_conclusions: list[ExpertExperienceConclusion]
+
+
 class FindingReviewResponse(FindingResponse):
     review_saved: bool
     expert_experience_saved: bool
     expert_experience_total_count: int = Field(ge=0)
+    expert_experience_requested: bool = False
+    experience_summary_job_id: str | None = None
+    source_run_id: str
+    source_finding_id: str
+    finding_row_id: int
 
 
 class DeleteCaseRequest(BaseModel):

@@ -28,6 +28,7 @@
       <a href="#case-component" title="案件文档"><span>▣</span><b>案件文档</b></a>
       <a href="#review-component" title="执行过程"><span>▥</span><b>执行过程</b></a>
       <a href="#result-component" title="审查结果"><span>✓</span><b>审查结果</b></a>
+      <a href="#expert-experience-library" data-role="experience-library-nav" title="专家经验库"><span>◇</span><b>专家经验库</b></a>
       <a href="#result-component" title="导出报告"><span>⇩</span><b>导出报告</b></a>
       <a href="#settings-component" title="AI设置"><span>⚙</span><b>AI设置</b></a>
     </nav>
@@ -63,6 +64,10 @@
           <button type="button" id="reload-expert-experiences" class="secondary-action">加载 / 重新加载专家经验库</button>
           <label class="experience-toggle"><input id="load-expert-experiences" type="checkbox">本轮加载专家经验库</label>
           <span id="expert-experience-status" class="ruleset-status">正在加载专家经验库…</span>
+          <details id="expert-experience-digest" class="experience-digest">
+            <summary>查看专家经验归纳</summary>
+            <div id="expert-experience-digest-content" aria-live="polite">正在归纳…</div>
+          </details>
         </div>
       </section>
 
@@ -93,6 +98,28 @@
       <section id="result-component" class="result-component" data-workflow-panel="results" hidden>
         <div class="result-toolbar"><div><p class="eyebrow">REVIEW FINDINGS</p><h2>审查结果</h2></div><span id="result-summary-label">尚无结果</span></div>
         <section id="result" aria-live="polite"></section>
+      </section>
+
+      <section id="expert-experience-library" class="result-component experience-library" hidden aria-labelledby="experience-library-title">
+        <div class="result-toolbar"><div><p class="eyebrow">EXPERT EXPERIENCE LIBRARY</p><h2 id="experience-library-title">专家经验库</h2></div><button type="button" class="secondary-action" data-role="experience-library-close">返回工作台</button></div>
+        <div class="experience-library-metrics">
+          <span>有效经验<strong data-role="experience-active-count">0</strong></span>
+          <span>已删除<strong data-role="experience-deleted-count">0</strong></span>
+          <span>归纳失败<strong data-role="experience-failed-count">0</strong></span>
+        </div>
+        <div class="experience-library-tabs" role="tablist">
+          <button type="button" data-experience-view="active" aria-selected="true">有效经验</button>
+          <button type="button" data-experience-view="deleted" aria-selected="false">已删除</button>
+          <button type="button" data-experience-view="failed" aria-selected="false">归纳失败</button>
+        </div>
+        <form id="experience-library-filters" class="experience-library-filters">
+          <input name="q" type="search" maxlength="200" placeholder="搜索标题、备注或归纳内容">
+          <select name="severity"><option value="">全部严重度</option><option value="high">高</option><option value="medium">中</option><option value="low">低</option></select>
+          <select name="origin"><option value="">全部来源</option><option value="rule">规则</option><option value="hybrid">混合</option><option value="llm">AI</option></select>
+          <input name="rule_id" maxlength="255" placeholder="规则ID">
+          <button type="submit" class="secondary-action">筛选</button>
+        </form>
+        <div data-role="experience-library-list" class="experience-library-list" aria-live="polite"><p class="experience-empty">正在读取专家经验…</p></div>
       </section>
     </main>
 
@@ -133,6 +160,7 @@
   <script src="/workbench_state.js"></script>
   <script src="/review_display_queue.js"></script>
   <script src="/review_progress.js"></script>
+  <script src="/expert_experience.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

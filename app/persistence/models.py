@@ -189,8 +189,66 @@ class FindingORM(Base):
     is_expert_experience: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     experience_saved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     experience_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    experience_summary_job_id: Mapped[str | None] = mapped_column(String(36), index=True)
     ai_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     review_run: Mapped[ReviewRunORM] = relationship(back_populates="findings")
+    experience_jobs: Mapped[list["ExpertExperienceSummaryJobORM"]] = relationship(
+        back_populates="finding", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class ExpertExperienceSummaryJobORM(Base):
+    __tablename__ = "expert_experience_summary_jobs"
+    __table_args__ = (
+        UniqueConstraint("finding_row_id", "source_hash", name="uq_experience_finding_source"),
+        Index("ix_experience_status_lease", "status", "lease_expires_at"),
+    )
+
+    job_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    finding_row_id: Mapped[int] = mapped_column(
+        ForeignKey("findings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    source_run_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    source_finding_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    source_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    task_type: Mapped[str] = mapped_column(String(64), nullable=False, default="EXPERT_EXPERIENCE_SUMMARY")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="PENDING")
+    summary_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    summary_text: Mapped[str | None] = mapped_column(Text)
+    summary_provider: Mapped[str | None] = mapped_column(String(64))
+    summary_model: Mapped[str | None] = mapped_column(String(255))
+    prompt_version: Mapped[str] = mapped_column(String(128), nullable=False, default="expert-experience-summary-v1")
+    evidence_snapshot: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
+    error_summary: Mapped[str | None] = mapped_column(String(500))
+    worker_token: Mapped[str | None] = mapped_column(String(36))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    experience_is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    experience_deleted_reason: Mapped[str | None] = mapped_column(String(500))
+    experience_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    experience_restored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    finding: Mapped[FindingORM] = relationship(back_populates="experience_jobs")
+
+
+class ExpertExperienceEvidenceSpanORM(Base):
+    __tablename__ = "expert_experience_evidence_spans"
+    __table_args__ = (UniqueConstraint("run_id", "span_id", name="uq_experience_span_run_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    span_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    text_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    location: Mapped[str] = mapped_column(String(1024), nullable=False)
+    document_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class RecycleBinORM(Base):

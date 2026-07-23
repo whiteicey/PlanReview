@@ -9,6 +9,9 @@ const progressRoot = document.querySelector("#review-progress-root");
 const rulesetStatusEl = document.querySelector("#ruleset-status");
 const expertExperienceStatusEl = document.querySelector("#expert-experience-status");
 const loadExpertExperiencesEl = document.querySelector("#load-expert-experiences");
+const expertExperienceDigestEl = document.querySelector("#expert-experience-digest-content");
+const experienceLibraryEl = document.querySelector("#expert-experience-library");
+const experienceLibraryListEl = document.querySelector('[data-role="experience-library-list"]');
 const EXPERT_EXPERIENCE_PREFERENCE_KEY = "planreview.loadExpertExperiences.v1";
 const EXPERT_EXPERIENCE_RUNS_KEY = "planreview.expertExperienceRuns.v1";
 let currentCaseId = null;
@@ -18,6 +21,7 @@ let currentFindings = [];
 let rulesetDefinitionCount = null;
 let currentRunDistinctRuleCount = null;
 let expertExperienceSummary = { total_count: 0, updated_at: null };
+let experienceLibraryView = "active";
 
 const CATEGORY_LABELS = {
   consistency: "一致性",
@@ -245,15 +249,90 @@ function renderExpertExperienceStatus(summary, message = null) {
   expertExperienceStatusEl.className = "ruleset-status warn";
 }
 
+function renderExpertExperienceDigest(digest) {
+  if (!expertExperienceDigestEl) return;
+  if (!digest || !Array.isArray(digest.categories) || !Array.isArray(digest.recent_conclusions)) {
+    expertExperienceDigestEl.innerHTML = '<p class="experience-empty">暂时无法归纳专家经验。</p>';
+    return;
+  }
+  if (Number(digest.total_count || 0) === 0) {
+    expertExperienceDigestEl.innerHTML = '<p class="experience-empty">尚无已沉淀的专家经验。</p>';
+    return;
+  }
+  const statusLabels = {
+    confirmed: "确认", rejected: "驳回", modified: "修正", resolved: "已解决",
+  };
+  const statusItems = Object.entries(digest.status_counts || {})
+    .filter(([, count]) => Number(count) > 0)
+    .map(([status, count]) => `<li><span>${escapeHtml(statusLabels[status] || status)}</span><strong>${Number(count)}</strong></li>`)
+    .join("");
+  const categoryItems = digest.categories
+    .map((item) => `<li><span>${escapeHtml(CATEGORY_LABELS[item.category] || item.category)}</span><strong>${Number(item.count)}</strong></li>`)
+    .join("");
+  const conclusions = digest.recent_conclusions
+    .map((item) => `<article class="experience-conclusion">
+      <strong>${escapeHtml(item.title)}</strong>
+      <small>${escapeHtml(statusLabels[item.review_status] || item.review_status)} · ${escapeHtml(CATEGORY_LABELS[item.category] || item.category)}${item.rule_id ? ` · ${escapeHtml(item.rule_id)}` : ""}</small>
+      <p>${escapeHtml(item.expert_note || "专家未填写补充说明")}</p>
+    </article>`)
+    .join("");
+  expertExperienceDigestEl.innerHTML = `
+    <div class="experience-digest-grid">
+      <section><h3>复核结论</h3><ul>${statusItems}</ul></section>
+      <section><h3>经验类别</h3><ul>${categoryItems}</ul></section>
+    </div>
+    <h3>最近归纳</h3><div class="experience-conclusions">${conclusions}</div>`;
+}
+
+function experienceStatusCopy(status) {
+  return ({
+    NOT_REQUESTED: "尚未请求归纳",
+    PENDING: "正在准备专家经验归纳……",
+    RUNNING: "正在提炼问题特征、判断依据和处理建议……",
+    COMPLETED: "已完成归纳，并沉淀至专家经验库",
+    FAILED: "专家复核结果已保存，经验归纳未完成",
+    STALE: "专家复核内容已变化，旧归纳已失效",
+    DELETED: "该经验已从有效经验库删除",
+  })[status] || status || "尚未请求归纳";
+}
+
+function renderExperienceJob(job) {
+  if (!job) return;
+  const card = result.querySelector(`.finding[data-finding-id="${CSS.escape(job.source_finding_id || "")}"]`);
+  if (!card) return;
+  const flow = card.querySelector('[data-role="experience-flow"]');
+  if (!flow) return;
+  const status = job.status || "NOT_REQUESTED";
+  card.dataset.experienceJobId = job.job_id || "";
+  flow.hidden = status === "NOT_REQUESTED";
+  flow.className = `experience-flow experience-flow-${status.toLowerCase()}`;
+  flow.querySelector('[data-role="experience-flow-copy"]').textContent = experienceStatusCopy(status);
+  flow.querySelector('[data-role="experience-retry"]').hidden = status !== "FAILED";
+  const summary = flow.querySelector('[data-role="experience-completed-summary"]');
+  summary.hidden = status !== "COMPLETED" || !job.experience_summary;
+  if (!summary.hidden) summary.textContent = job.experience_summary.experience_title;
+}
+
+const experienceController = globalThis.createExpertExperienceController({
+  onJobChange: renderExperienceJob,
+  onCountChange: (count) => {
+    renderExpertExperienceStatus({ total_count: Number(count || 0) });
+    const node = document.querySelector('[data-role="experience-active-count"]');
+    if (node) node.textContent = Number(count || 0);
+  },
+});
+
 async function refreshExpertExperienceSummary() {
   try {
-    const response = await fetch("/api/expert-experiences/summary");
+    const response = await fetch("/api/expert-experiences/digest?limit=8");
     if (!response.ok) throw new Error("experience summary unavailable");
-    const summary = await response.json();
-    renderExpertExperienceStatus(summary);
-    return summary;
+    const digest = await response.json();
+    renderExpertExperienceStatus(digest);
+    renderExpertExperienceDigest(digest);
+    return digest;
   } catch (_) {
     renderExpertExperienceStatus(null);
+    renderExpertExperienceDigest(null);
     return null;
   }
 }
@@ -422,6 +501,12 @@ function findingCard(finding) {
         <label class="experience-finding-toggle"><input type="checkbox" data-role="expert-experience"${finding.is_expert_experience ? " checked" : ""}>将本次复核结论沉淀至专家经验库</label>
         <button type="button" data-role="save-review">保存复核</button>
         <span data-role="save-hint" class="save-hint"></span>
+        <div class="experience-flow experience-flow-${escapeHtml((finding.experience_summary_status || "NOT_REQUESTED").toLowerCase())}" data-role="experience-flow"${finding.experience_summary_status === "NOT_REQUESTED" ? " hidden" : ""}>
+          <svg viewBox="0 0 240 56" aria-hidden="true"><path class="experience-flow-line" d="M38 28 H104 M136 28 H202"/><polygon class="experience-shape experience-diamond" points="18,28 38,8 58,28 38,48"/><circle class="experience-shape experience-circle" cx="120" cy="28" r="18"/><polygon class="experience-shape experience-hexagon" points="182,12 202,6 222,18 222,38 202,50 182,44"/><path class="experience-check" d="M194 29 l6 6 12-15"/></svg>
+          <span data-role="experience-flow-copy">${escapeHtml(experienceStatusCopy(finding.experience_summary_status))}</span>
+          <strong data-role="experience-completed-summary" hidden></strong>
+          <button type="button" class="text-action" data-role="experience-retry"${finding.experience_summary_status === "FAILED" ? "" : " hidden"}>重新归纳</button>
+        </div>
       </div>
     </article>`;
 }
@@ -455,10 +540,16 @@ async function saveReview(card) {
       REVIEW_STATUS_LABELS[updated.review_status] || updated.review_status;
     if (experienceBox) experienceBox.checked = updated.is_expert_experience === true;
     renderExpertExperienceStatus({ total_count: updated.expert_experience_total_count });
-    hint.textContent = updated.expert_experience_saved
-      ? "专家复核结果已保存，并已沉淀至专家经验库"
+    hint.textContent = updated.expert_experience_requested
+      ? `专家复核结果已保存；${experienceStatusCopy(updated.experience_summary_status)}`
       : "专家复核结果已保存";
     hint.className = "save-hint ok";
+    if (updated.experience_summary_job_id) experienceController.track({
+      job_id: updated.experience_summary_job_id,
+      source_finding_id: updated.source_finding_id,
+      status: updated.experience_summary_status,
+      expert_experience_total_count: updated.expert_experience_total_count,
+    });
   } catch (error) {
     hint.textContent = "无法连接本地服务";
     hint.className = "save-hint err";
@@ -466,6 +557,20 @@ async function saveReview(card) {
 }
 
 result.addEventListener("click", (event) => {
+  const retry = event.target.closest('[data-role="experience-retry"]');
+  if (retry) {
+    const card = retry.closest(".finding");
+    retry.disabled = true;
+    fetch(`/api/cases/${currentCaseId}/runs/${currentRunId}/findings/${encodeURIComponent(card.dataset.findingId)}/expert-experience/retry`, { method: "POST" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("retry failed");
+        const job = await response.json();
+        experienceController.track(job);
+      })
+      .catch(() => { retry.hidden = false; })
+      .finally(() => { retry.disabled = false; });
+    return;
+  }
   const button = event.target.closest('[data-role="save-review"]');
   if (!button) return;
   const card = button.closest(".finding");
@@ -525,6 +630,15 @@ function renderResult(summary, findings, diagnostics = {}) {
     parts.push('<p class="foot">以上为初审结果，不是正式审查结论。请由具备资质的专家复核后再作决定。</p>');
   }
   result.innerHTML = parts.join("");
+  for (const finding of findings) {
+    if (finding.experience_id && ["PENDING", "RUNNING"].includes(finding.experience_summary_status)) {
+      experienceController.track({
+        job_id: finding.experience_id,
+        source_finding_id: finding.finding_id,
+        status: finding.experience_summary_status,
+      });
+    }
+  }
   renderCompletedSummary(summary, findings, diagnostics);
 }
 
@@ -606,6 +720,87 @@ document.querySelector("#upload").addEventListener("submit", async (event) => {
     progressController.start(uploaded.case_id, accepted.run_id);
   } catch (error) {
     result.textContent = "无法连接本地服务，请确认服务已启动。";
+  }
+});
+
+function showExperienceLibrary(show = true) {
+  experienceLibraryEl.hidden = !show;
+  document.querySelector("#review-component").hidden = show;
+  resultComponent.hidden = show ? true : !currentSummary;
+  if (show) loadExperienceLibrary();
+}
+
+function experienceLibraryCard(item) {
+  const summary = item.summary;
+  const actions = item.status === "DELETED"
+    ? `<button type="button" data-experience-action="restore">恢复</button>`
+    : item.status === "FAILED"
+      ? `<button type="button" data-experience-action="retry">重新归纳</button>`
+      : `<button type="button" data-experience-action="delete">删除</button>`;
+  return `<article class="experience-library-item" data-experience-id="${escapeHtml(item.experience_id)}" data-case-id="${escapeHtml(item.source_case_id)}" data-run-id="${escapeHtml(item.source_run_id)}" data-finding-id="${escapeHtml(item.source_finding_id)}">
+    <header><span class="badge">${escapeHtml(categoryLabel(item.category))}</span><span class="sev">${escapeHtml(SEVERITY_LABELS[item.severity] || item.severity)}</span><span class="status-pill">${escapeHtml(item.status)}</span></header>
+    <h3>${escapeHtml(summary?.experience_title || item.title)}</h3>
+    <div class="experience-judgment"><strong>专家原结论</strong><p>${escapeHtml(REVIEW_STATUS_LABELS[item.expert_review_status] || item.expert_review_status)}${item.expert_note ? `：${escapeHtml(item.expert_note)}` : ""}</p></div>
+    ${summary ? `<details><summary>查看模型归纳</summary><p><b>问题模式：</b>${escapeHtml(summary.problem_pattern)}</p><p><b>判断依据：</b>${summary.judgment_basis.map(escapeHtml).join("；")}</p><p><b>处理建议：</b>${summary.recommended_action.map(escapeHtml).join("；")}</p><p><b>适用范围：</b>${escapeHtml(summary.applicable_scope)}</p><p><b>关键词：</b>${summary.keywords.map(escapeHtml).join("、")}</p></details>` : `<p class="experience-empty">${escapeHtml(item.status === "FAILED" ? "归纳未完成，可重新归纳。" : "暂无归纳内容。")}</p>`}
+    <footer><button type="button" data-experience-action="source">查看来源</button>${actions}</footer>
+  </article>`;
+}
+
+async function loadExperienceLibrary() {
+  const form = document.querySelector("#experience-library-filters");
+  const params = new URLSearchParams({ view: experienceLibraryView, page: "1", page_size: "50" });
+  for (const [key, value] of new FormData(form).entries()) if (value) params.set(key, value);
+  experienceLibraryListEl.innerHTML = '<p class="experience-empty">正在读取专家经验…</p>';
+  try {
+    const response = await fetch(`/api/expert-experiences?${params}`);
+    if (!response.ok) throw new Error("library unavailable");
+    const payload = await response.json();
+    document.querySelector('[data-role="experience-active-count"]').textContent = payload.active_count;
+    document.querySelector('[data-role="experience-deleted-count"]').textContent = payload.deleted_count;
+    document.querySelector('[data-role="experience-failed-count"]').textContent = payload.failed_count;
+    experienceLibraryListEl.innerHTML = payload.items.length
+      ? payload.items.map(experienceLibraryCard).join("")
+      : '<p class="experience-empty">当前筛选条件下没有专家经验。</p>';
+  } catch (_) {
+    experienceLibraryListEl.innerHTML = '<p class="experience-empty">无法读取专家经验库。</p>';
+  }
+}
+
+document.querySelector('[data-role="experience-library-nav"]')?.addEventListener("click", (event) => {
+  event.preventDefault(); showExperienceLibrary(true);
+});
+document.querySelector('[data-role="experience-library-close"]')?.addEventListener("click", () => showExperienceLibrary(false));
+document.querySelector("#experience-library-filters")?.addEventListener("submit", (event) => { event.preventDefault(); loadExperienceLibrary(); });
+document.querySelectorAll("[data-experience-view]").forEach((button) => button.addEventListener("click", () => {
+  experienceLibraryView = button.dataset.experienceView;
+  document.querySelectorAll("[data-experience-view]").forEach((candidate) => candidate.setAttribute("aria-selected", String(candidate === button)));
+  loadExperienceLibrary();
+}));
+
+experienceLibraryListEl?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-experience-action]");
+  const card = button?.closest("[data-experience-id]");
+  if (!button || !card) return;
+  const action = button.dataset.experienceAction;
+  if (action === "source") {
+    showExperienceLibrary(false);
+    await loadCompletedRun({ runStatus: "READY_FOR_HUMAN_REVIEW" }, card.dataset.caseId, card.dataset.runId);
+    result.querySelector(`.finding[data-finding-id="${CSS.escape(card.dataset.findingId)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  if (action === "delete" && !confirm("确认从专家经验库删除？\n\n删除后不再计数，但不会删除原审查问题、专家复核、历史Run或导出结果。")) return;
+  button.disabled = true;
+  try {
+    let response;
+    if (action === "delete") response = await fetch(`/api/expert-experiences/${card.dataset.experienceId}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: "{}" });
+    if (action === "restore") response = await fetch(`/api/expert-experiences/${card.dataset.experienceId}/restore`, { method: "POST" });
+    if (action === "retry") response = await fetch(`/api/cases/${card.dataset.caseId}/runs/${card.dataset.runId}/findings/${card.dataset.findingId}/expert-experience/retry`, { method: "POST" });
+    if (!response?.ok) throw new Error("mutation failed");
+    const payload = await response.json();
+    if (payload.job_id) experienceController.track(payload);
+    await Promise.all([loadExperienceLibrary(), refreshExpertExperienceSummary()]);
+  } catch (_) {
+    button.disabled = false;
   }
 });
 

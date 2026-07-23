@@ -142,6 +142,20 @@ class AnthropicAdapter:
             content_block_count=metadata["content_block_count"],
         )
 
+    def complete_text(self, system_prompt: str, user_content: str) -> str:
+        """Task-neutral text completion used by isolated, strictly validated workflows."""
+        if not isinstance(system_prompt, str) or not system_prompt or not isinstance(user_content, str):
+            raise ValueError("completion input is invalid")
+        response = self._post({
+            "model": self._model,
+            "max_tokens": self._max_tokens,
+            "temperature": self._temperature,
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": user_content}],
+        })
+        text, _metadata = self._extract_text(response)
+        return text
+
     def test_connection(self) -> LLMConnectionResult:
         response = self._post({
             "model": self._model,

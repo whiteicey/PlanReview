@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+import hashlib
 from uuid import uuid4
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -11,8 +12,35 @@ from app.domain.schemas import Finding, RuleResult
 from app.persistence.db import create_session
 from app.persistence.models import Base, CaseRecord
 from app.persistence.repository import ReviewRepository
+from app.experience.repository import ExperienceRepository
+from app.experience.schemas import ExperienceSummary
 from app.review.pipeline import ReviewRun
 from app.storage.case_files import StoredFile
+
+
+def _complete_experience(repo: ReviewRepository, run: ReviewRun, finding_id: str) -> str:
+    experiences = ExperienceRepository(repo.session)
+    finding = experiences._finding(run.case_id, run.run_id, finding_id)
+    assert finding is not None
+    hashes = dict(finding.review_run.evidence_text_hashes or {})
+    for span_id in finding.evidence_span_ids:
+        hashes.setdefault(span_id, hashlib.sha256(span_id.encode("utf-8")).hexdigest())
+    finding.review_run.evidence_text_hashes = hashes
+    repo.session.commit()
+    requested = experiences.synchronize_after_review(run.case_id, run.run_id, finding_id)
+    assert requested is not None
+    token = str(uuid4())
+    assert experiences.claim(requested.job_id, token)
+    summary = ExperienceSummary(
+        experience_title="专家经验归纳",
+        problem_pattern="同类问题会重复出现。",
+        judgment_basis=["专家已确认"],
+        recommended_action=["按专家意见处理"],
+        applicable_scope="同类技术方案",
+        keywords=["专家经验", "复核"],
+    )
+    assert experiences.complete(requested.job_id, token, summary, "mock", "mock")
+    return requested.job_id
 
 
 def test_ai_batch_checkpoint_is_immediately_persisted_and_final_save_replaces_it():
@@ -137,7 +165,9 @@ def test_expert_experience_summary_uses_live_non_pending_findings_only(tmp_path)
     saved = repo.update_finding_review(
         run.case_id, run.run_id, "F-experience", ReviewStatus.CONFIRMED, "专家确认", True,
     )
-    assert saved.total_count == 1 and saved.updated_at is not None
+    assert (saved.total_count, saved.updated_at) == (0, None)
+    _complete_experience(repo, run, "F-experience")
+    assert repo.get_expert_experience_summary().total_count == 1
     first = ReviewRepository(create_session(db)).get_run(run.run_id)
     assert first is not None and first.findings[0].is_expert_experience is True
     saved_at = first.findings[0].experience_saved_at
@@ -147,10 +177,15 @@ def test_expert_experience_summary_uses_live_non_pending_findings_only(tmp_path)
         run.case_id, run.run_id, "F-experience", ReviewStatus.CONFIRMED, "补充专家备注", True,
     )
     assert repeated.total_count == 1
+    ExperienceRepository(repo.session).synchronize_after_review(
+        run.case_id, run.run_id, "F-experience"
+    )
+    assert repo.get_expert_experience_summary().total_count == 0
+    _complete_experience(repo, run, "F-experience")
+    assert repo.get_expert_experience_summary().total_count == 1
     second = ReviewRepository(create_session(db)).get_run(run.run_id)
     assert second is not None
     assert second.findings[0].human_note == "补充专家备注"
-    assert second.findings[0].experience_saved_at == saved_at
 
     # Pending is never an effective experience, even if the client checked the box.
     cancelled = repo.update_finding_review(
@@ -161,6 +196,47 @@ def test_expert_experience_summary_uses_live_non_pending_findings_only(tmp_path)
     assert restarted is not None
     assert restarted.findings[0].is_expert_experience is False
     assert restarted.findings[0].human_note == "等待补充证据"
+
+
+def test_expert_experience_digest_groups_statuses_categories_and_hides_recycled_cases(tmp_path):
+    repo = ReviewRepository(create_session(tmp_path / "review.db"))
+    run = ReviewRun("CASE-digest", findings=[
+        Finding(
+            finding_id="F-capacity", origin=Origin.RULE, category="capacity",
+            severity=Severity.MEDIUM, title="处理能力不足", rule_id="CAPACITY-001",
+            evidence_span_ids=["span-1"], needs_human_review=True,
+        ),
+        Finding(
+            finding_id="F-term", origin=Origin.RULE, category="terminology",
+            severity=Severity.LOW, title="术语需统一", rule_id="TERM-001",
+            evidence_span_ids=["span-2"], needs_human_review=True,
+        ),
+    ], final_status="READY_FOR_HUMAN_REVIEW")
+    repo.save_run(run)
+    repo.update_finding_review(
+        run.case_id, run.run_id, "F-capacity", ReviewStatus.CONFIRMED, "按峰值工况校核", True,
+    )
+    repo.update_finding_review(
+        run.case_id, run.run_id, "F-term", ReviewStatus.REJECTED, "属于可接受别名", True,
+    )
+
+    _complete_experience(repo, run, "F-capacity")
+    _complete_experience(repo, run, "F-term")
+    digest = repo.get_expert_experience_digest(recent_limit=1)
+    assert digest.total_count == 2
+    assert digest.status_counts["confirmed"] == 1
+    assert digest.status_counts["rejected"] == 1
+    assert [(item.category, item.count) for item in digest.categories] == [
+        ("capacity", 1), ("terminology", 1),
+    ]
+    assert len(digest.recent_conclusions) == 1
+    assert digest.recent_conclusions[0].expert_note == "属于可接受别名"
+    assert not hasattr(digest.recent_conclusions[0], "case_id")
+    assert not hasattr(digest.recent_conclusions[0], "evidence_span_ids")
+
+    repo.delete_case_to_recycle_bin(run.case_id)
+    assert repo.get_expert_experience_summary().total_count == 0
+    assert repo.get_expert_experience_digest().total_count == 0
 
 
 def test_expert_experience_review_failure_rolls_back_without_changing_live_summary(tmp_path):
@@ -176,6 +252,7 @@ def test_expert_experience_review_failure_rolls_back_without_changing_live_summa
     )
     repo.save_run(run)
     repo.update_finding_review(run.case_id, run.run_id, "F-rollback", ReviewStatus.CONFIRMED, "有效备注", True)
+    _complete_experience(repo, run, "F-rollback")
     with pytest.raises(ValueError):
         repo.update_finding_review(
             run.case_id, run.run_id, "F-rollback", ReviewStatus.REJECTED, "api_key=not-a-real-key", False,

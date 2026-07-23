@@ -1,0 +1,6 @@
+{
+  "provider": "anthropic",
+  "base_url": "",
+  "model": "deepseek-v4-pro",
+  "allow_private_endpoint": false
+}

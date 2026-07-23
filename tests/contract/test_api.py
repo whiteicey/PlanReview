@@ -185,16 +185,28 @@ def test_expert_experience_summary_is_live_and_review_patch_returns_committed_co
     })
     assert saved.status_code == 200
     assert saved.json()["review_saved"] is True
-    assert saved.json()["expert_experience_saved"] is True
-    assert saved.json()["expert_experience_total_count"] == 1
+    assert saved.json()["expert_experience_saved"] is False
+    assert saved.json()["expert_experience_requested"] is True
+    assert saved.json()["experience_summary_status"] == "PENDING"
+    assert saved.json()["experience_id"] == saved.json()["experience_summary_job_id"]
+    assert saved.json()["source_run_id"] == run_id
+    assert saved.json()["source_finding_id"] == finding_id
+    assert isinstance(saved.json()["finding_row_id"], int)
+    assert saved.json()["expert_experience_total_count"] == 0
 
     repeated = client.patch(endpoint, json={
         "review_status": "confirmed", "human_note": "专家备注已更新", "is_expert_experience": True,
     })
     assert repeated.status_code == 200
-    assert repeated.json()["expert_experience_total_count"] == 1
+    assert repeated.json()["expert_experience_total_count"] == 0
     live = client.get("/api/expert-experiences/summary").json()
-    assert live["total_count"] == 1 and live["updated_at"] is not None
+    assert live == {"total_count": 0, "updated_at": None}
+    digest_response = client.get("/api/expert-experiences/digest?limit=3")
+    assert digest_response.status_code == 200
+    digest = digest_response.json()
+    assert digest["total_count"] == 0
+    assert digest["status_counts"]["confirmed"] == 0
+    assert digest["recent_conclusions"] == []
 
     pending = client.patch(endpoint, json={
         "review_status": "pending", "human_note": "等待补充材料", "is_expert_experience": True,
@@ -237,6 +249,51 @@ def test_expert_review_updates_status_and_note_without_overwriting_original(monk
     for key, value in original.items():
         assert body[key] == value
 
+
+def test_experience_management_uses_job_id_and_backend_counts(monkeypatch, tmp_path):
+    from app.experience.repository import ExperienceRepository
+    from app.experience.schemas import ExperienceSummary
+
+    client = client_for(monkeypatch, tmp_path, FakeProvider())
+    upload = client.post(
+        "/api/cases",
+        files={"file": ("方案.docx", docx_bytes(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    )
+    case_id = upload.json()["case_id"]
+    run_id = client.post(f"/api/cases/{case_id}/review").json()["run_id"]
+    finding_id = client.get(f"/api/cases/{case_id}/findings").json()[0]["finding_id"]
+    saved = client.patch(
+        f"/api/cases/{case_id}/runs/{run_id}/findings/{finding_id}",
+        json={"review_status": "confirmed", "human_note": "专家确认", "is_expert_experience": True},
+    ).json()
+    experience_id = saved["experience_id"]
+    session = client.app.state.database_runtime.session()
+    repository = ExperienceRepository(session)
+    assert repository.claim(experience_id, "contract-worker")
+    assert repository.complete(experience_id, "contract-worker", ExperienceSummary(
+        experience_title="参数一致性经验", problem_pattern="多章节参数口径不一致。",
+        judgment_basis=["专家确认存在冲突"], recommended_action=["统一参数口径"],
+        applicable_scope="设备参数审查", keywords=["参数", "一致性"],
+    ), "mock", "mock")
+    session.close()
+
+    job = client.get(f"/api/expert-experience-summary-jobs/{experience_id}")
+    assert job.status_code == 200
+    assert job.json()["experience_id"] == experience_id
+    assert job.json()["expert_review_status"] == "confirmed"
+    library = client.get("/api/expert-experiences?view=active").json()
+    assert library["active_count"] == 1
+    assert library["items"][0]["experience_id"] == experience_id
+    assert library["items"][0]["summary"]["experience_title"] == "参数一致性经验"
+
+    deleted = client.request(
+        "DELETE", f"/api/expert-experiences/{experience_id}", json={"reason": "测试软删除"}
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["expert_experience_total_count"] == 0
+    restored = client.post(f"/api/expert-experiences/{experience_id}/restore")
+    assert restored.status_code == 200
+    assert restored.json()["expert_experience_total_count"] == 1
 
 def test_expert_review_rejects_invalid_status_secret_note_and_unknown_finding(monkeypatch, tmp_path):
     client = client_for(monkeypatch, tmp_path, FakeProvider())

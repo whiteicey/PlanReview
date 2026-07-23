@@ -62,6 +62,31 @@ class ExpertExperienceSummary:
     total_count: int
     updated_at: datetime | None
 
+
+@dataclass(frozen=True)
+class ExpertExperienceCategory:
+    category: str
+    count: int
+
+
+@dataclass(frozen=True)
+class ExpertExperienceConclusion:
+    title: str
+    category: str
+    rule_id: str | None
+    review_status: str
+    expert_note: str | None
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class ExpertExperienceDigest:
+    total_count: int
+    updated_at: datetime | None
+    status_counts: dict[str, int]
+    categories: tuple[ExpertExperienceCategory, ...]
+    recent_conclusions: tuple[ExpertExperienceConclusion, ...]
+
 # Metadata keys are matched exactly (or by an explicitly dangerous suffix).
 _SENSITIVE_METADATA_KEYS = frozenset(
     {
@@ -798,18 +823,103 @@ class ReviewRepository:
         return self.get_expert_experience_summary()
 
     def get_expert_experience_summary(self) -> ExpertExperienceSummary:
-        """Return the live count; no cache or process-local counter is used."""
-        predicate = (
+        """Return only completed, current, non-deleted summarized experiences."""
+        from app.experience.repository import ExperienceRepository
+        from app.persistence.models import ExpertExperienceSummaryJobORM
+
+        total_count = ExperienceRepository(self.session).active_count()
+        updated_at = self.session.scalar(
+            select(func.max(ExpertExperienceSummaryJobORM.updated_at))
+            .join(FindingORM, FindingORM.id == ExpertExperienceSummaryJobORM.finding_row_id)
+            .join(ReviewRunORM, ReviewRunORM.id == FindingORM.review_run_id)
+            .outerjoin(RecycleBinORM, RecycleBinORM.case_id == ReviewRunORM.case_id)
+            .where(
+                FindingORM.experience_summary_job_id == ExpertExperienceSummaryJobORM.job_id,
+                FindingORM.is_expert_experience.is_(True),
+                FindingORM.review_status != ReviewStatus.PENDING.value,
+                ExpertExperienceSummaryJobORM.status == "COMPLETED",
+                ExpertExperienceSummaryJobORM.experience_is_deleted.is_(False),
+                RecycleBinORM.case_id.is_(None),
+            )
+        )
+        return ExpertExperienceSummary(total_count=total_count, updated_at=updated_at)
+
+    @staticmethod
+    def _active_expert_experience_predicate() -> tuple[object, ...]:
+        return (
             FindingORM.is_expert_experience.is_(True),
             FindingORM.review_status != ReviewStatus.PENDING.value,
+            RecycleBinORM.case_id.is_(None),
         )
-        total_count, updated_at = self.session.execute(
-            select(
-                func.count(FindingORM.id),
-                func.max(FindingORM.experience_updated_at),
-            ).where(*predicate)
-        ).one()
-        return ExpertExperienceSummary(total_count=int(total_count), updated_at=updated_at)
+
+    def get_expert_experience_digest(self, recent_limit: int = 8) -> ExpertExperienceDigest:
+        """Build a privacy-minimal digest without exposing case or evidence identifiers."""
+        from app.persistence.models import ExpertExperienceSummaryJobORM
+
+        if not 1 <= recent_limit <= 50:
+            raise ValueError("recent_limit must be between 1 and 50")
+        predicate = (
+            FindingORM.experience_summary_job_id == ExpertExperienceSummaryJobORM.job_id,
+            FindingORM.is_expert_experience.is_(True),
+            FindingORM.review_status != ReviewStatus.PENDING.value,
+            ExpertExperienceSummaryJobORM.status == "COMPLETED",
+            ExpertExperienceSummaryJobORM.experience_is_deleted.is_(False),
+            RecycleBinORM.case_id.is_(None),
+        )
+        summary = self.get_expert_experience_summary()
+        status_rows = self.session.execute(
+            select(FindingORM.review_status, func.count(FindingORM.id))
+            .join(ExpertExperienceSummaryJobORM, ExpertExperienceSummaryJobORM.finding_row_id == FindingORM.id)
+            .join(ReviewRunORM)
+            .outerjoin(RecycleBinORM, RecycleBinORM.case_id == ReviewRunORM.case_id)
+            .where(*predicate)
+            .group_by(FindingORM.review_status)
+        ).all()
+        category_rows = self.session.execute(
+            select(FindingORM.category, func.count(FindingORM.id))
+            .join(ExpertExperienceSummaryJobORM, ExpertExperienceSummaryJobORM.finding_row_id == FindingORM.id)
+            .join(ReviewRunORM)
+            .outerjoin(RecycleBinORM, RecycleBinORM.case_id == ReviewRunORM.case_id)
+            .where(*predicate)
+            .group_by(FindingORM.category)
+        ).all()
+        recent_rows = self.session.scalars(
+            select(FindingORM)
+            .join(ExpertExperienceSummaryJobORM, ExpertExperienceSummaryJobORM.finding_row_id == FindingORM.id)
+            .join(ReviewRunORM)
+            .outerjoin(RecycleBinORM, RecycleBinORM.case_id == ReviewRunORM.case_id)
+            .where(*predicate)
+            .order_by(ExpertExperienceSummaryJobORM.updated_at.desc(), FindingORM.id.desc())
+            .limit(recent_limit)
+        ).all()
+        status_counts = {status.value: 0 for status in ReviewStatus if status is not ReviewStatus.PENDING}
+        for review_status, count in status_rows:
+            status_counts[review_status] = int(count)
+        categories = tuple(
+            ExpertExperienceCategory(category=category, count=int(count))
+            for category, count in sorted(category_rows, key=lambda item: (-item[1], item[0]))
+        )
+        recent = tuple(
+            ExpertExperienceConclusion(
+                title=row.title,
+                category=row.category,
+                rule_id=row.rule_id,
+                review_status=row.review_status,
+                expert_note=row.human_note,
+                updated_at=self.session.get(
+                    ExpertExperienceSummaryJobORM, row.experience_summary_job_id
+                ).updated_at,
+            )
+            for row in recent_rows
+            if row.experience_summary_job_id is not None
+        )
+        return ExpertExperienceDigest(
+            total_count=summary.total_count,
+            updated_at=summary.updated_at,
+            status_counts=status_counts,
+            categories=categories,
+            recent_conclusions=recent,
+        )
 
     def delete_case_to_recycle_bin(self, case_id: str) -> None:
         """Hide a case from active queries while retaining it for confirmed deletion."""
